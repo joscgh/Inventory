@@ -1,0 +1,269 @@
+﻿@using Inventory.Core.Classes
+@using Inventory.Core.Enums
+@using Inventory.RazorLib.Components
+@using Inventory.RazorLib.Services
+@inject ItemApiService ApiService
+@inject CurrencyApiService CurrencyService
+@inject CategoryApiService CategoryService
+    
+<div class="card p-4 shadow-sm mb-4">
+    <h3 class="card-title text-primary">📦 Register New Item</h3>
+    <hr />
+
+    <EditForm Model="@newItem" OnValidSubmit="HandleSubmit">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        @if (!string.IsNullOrEmpty(feedbackMessage))
+        {
+            <div class="alert @feedbackClass mt-3" role="alert">
+                @feedbackMessage
+            </div>
+        }
+
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Name</label>
+                <input class="form-control" @bind="newItem.Name" placeholder="Product name" required />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">SKU</label>
+                <div class="input-group">
+                    <input class="form-control" @bind="newItem.SKU" placeholder="e.g., SKU000001" disabled="@autoGenerateSku" required />
+                    <button class="btn btn-outline-secondary" type="button" @onclick="GenerateSku">Generate</button>
+                </div>
+                <div class="form-text mt-1">
+                    <input class="form-check-input me-1" type="checkbox" id="autoSku" @bind="autoGenerateSku" />
+                    <label class="form-check-label" for="autoSku">Auto-generate SKU</label>
+                </div>
+                @if (autoGenerateSku)
+                {
+                    <div class="form-text">Preview: <strong>@PreviewSku</strong></div>
+                }
+            </div>
+            <div class="col-md-12">
+                <BarcodeScanner OnScanned="HandleBarcodeScanned" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Prefix</label>
+                <input class="form-control" @bind="skuPrefix" placeholder="SKU" disabled="@(!autoGenerateSku)" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Digits</label>
+                <input type="number" class="form-control" @bind="skuDigits" min="1" max="12" disabled="@(!autoGenerateSku)" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Category</label>
+                <select class="form-select" @bind="newItem.CategoryId">
+                    @if (!categories.Any())
+                    {
+                        <option value="0">Loading categories...</option>
+                    }
+                    else
+                    {
+                        <option value="0">-- Select Category --</option>
+                        @foreach (var category in categories)
+                        {
+                            <option value="@category.Id">@category.Name</option>
+                        }
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Currency</label>
+                <select class="form-select" @bind="newItem.CurrencyId">
+                    @if (!currencies.Any())
+                    {
+                        <option disabled>Loading currencies...</option>
+                    }
+                    else
+                    {
+                        <option value="0">-- Select Currency --</option>
+                        @foreach (var currency in currencies)
+                        {
+                            <option value="@currency.Id">@currency.Code - @currency.Name</option>
+                        }
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Unit Type</label>
+                <select class="form-select" @bind="newItem.Unit">
+                    @foreach (var unit in Enum.GetValues<UnitType>())
+                    {
+                        <option value="@unit">@unit</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Price</label>
+                <input type="number" step="0.01" class="form-control" @bind="newItem.Price" required />
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Initial Stock</label>
+                <input type="number" step="0.1" class="form-control" @bind="newItem.Stock" required />
+            </div>
+        </div>
+
+        <h5 class="mt-4 text-secondary">⚙️ Custom Attributes (Specifications)</h5>
+        <div class="row g-2 align-items-center mb-3">
+            <div class="col-sm-4">
+                <input class="form-control form-control-sm" @bind="newAttrKey" placeholder="Property (e.g., Viscosity, Size)" />
+            </div>
+            <div class="col-sm-5">
+                <input class="form-control form-control-sm" @bind="newAttrValue" placeholder="Value (e.g., 5W-30, 2 inches)" />
+            </div>
+            <div class="col-sm-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm w-100" @onclick="AddAttribute">➕ Add Attr</button>
+            </div>
+        </div>
+
+        @if (newItem.Attributes.Any())
+        {
+            <div class="mb-3">
+                @foreach (var attr in newItem.Attributes)
+                {
+                    <span class="badge bg-light text-dark border me-2 p-2">
+                        <strong>@attr.Name:</strong> @attr.Value
+                        <button type="button" class="btn-close ms-2" style="font-size: 0.6rem;" @onclick="() => newItem.Attributes.Remove(attr)"></button>
+                    </span>
+                }
+            </div>
+        }
+
+        <button type="submit" class="btn btn-primary mt-2 w-100">💾 Save Item to Inventory</button>
+    </EditForm>
+</div>
+
+@code {
+    [Parameter] public EventCallback OnItemSaved { get; set; }
+
+private ItemUniversal newItem = new();
+    private List<ItemUniversal> existingItems = new();
+    private List<Currency> currencies = new();
+    private List<Category> categories = new();
+    private string newAttrKey = "";
+    private string newAttrValue = "";
+    private bool autoGenerateSku = true;
+    private string skuPrefix = string.Empty;
+    private int skuDigits = 9;
+    private string feedbackMessage = string.Empty;
+    private string feedbackClass = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCurrencies();
+        await LoadCategories();
+        await LoadExistingItems();
+    }
+
+    private async Task LoadCurrencies()
+    {
+        currencies = await CurrencyService.GetCurrenciesAsync();
+        if (currencies.Any() && newItem.CurrencyId == 0)
+        {
+            newItem.CurrencyId = currencies.First().Id;
+        }
+    }
+
+    private async Task LoadCategories()
+    {
+        categories = await CategoryService.GetCategoriesAsync();
+        if (categories.Any() && newItem.CategoryId == 0)
+        {
+            newItem.CategoryId = categories.First().Id;
+        }
+    }
+
+    private async Task LoadExistingItems()
+    {
+        existingItems = await ApiService.GetItemsAsync();
+    }
+
+    private string PreviewSku => GenerateFormattedSku(GetNextSkuNumber());
+
+    private void GenerateSku()
+    {
+        newItem.SKU = PreviewSku;
+    }
+
+    private async Task HandleBarcodeScanned(string code)
+    {
+        autoGenerateSku = false;
+        newItem.SKU = code;
+        await Task.CompletedTask;
+    }
+
+    private int GetNextSkuNumber()
+    {
+        var prefix = skuPrefix ?? string.Empty;
+
+        var candidateNumbers = existingItems
+            .Select(item => item.SKU ?? string.Empty)
+            .Select(sku =>
+            {
+                if (!string.IsNullOrEmpty(prefix) && sku.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                {
+                    sku = sku[prefix.Length..];
+                }
+
+                return int.TryParse(sku, out var numeric) ? numeric : 0;
+            })
+            .Where(value => value >= 0);
+
+        return candidateNumbers.Any() ? candidateNumbers.Max() + 1 : 1;
+    }
+
+    private string GenerateFormattedSku(int number)
+    {
+        var digits = skuDigits < 1 ? 1 : skuDigits;
+        return (skuPrefix ?? string.Empty) + number.ToString($"D{digits}");
+    }
+
+    private void AddAttribute()
+    {
+        if (!string.IsNullOrWhiteSpace(newAttrKey) && !string.IsNullOrWhiteSpace(newAttrValue))
+        {
+            newItem.AddAttribute(newAttrKey.Trim(), newAttrValue.Trim());
+            newAttrKey = "";
+            newAttrValue = "";
+        }
+    }
+
+    private async Task HandleSubmit()
+    {
+        feedbackMessage = string.Empty;
+        feedbackClass = string.Empty;
+
+        if (autoGenerateSku && string.IsNullOrWhiteSpace(newItem.SKU))
+        {
+            newItem.SKU = PreviewSku;
+        }
+
+        if (string.IsNullOrWhiteSpace(newItem.SKU)
+            || string.IsNullOrWhiteSpace(newItem.Name)
+            || newItem.Price <= 0
+            || newItem.Stock <= 0
+            || newItem.CurrencyId == 0
+            || newItem.CategoryId == 0)
+        {
+            feedbackMessage = "Por favor completa todos los campos obligatorios y usa valores válidos.";
+            feedbackClass = "alert alert-warning";
+            return;
+        }
+
+        var success = await ApiService.SaveItemAsync(newItem);
+        if (success)
+        {
+            feedbackMessage = "Artículo guardado correctamente.";
+            feedbackClass = "alert alert-success";
+            newItem = new();
+            await OnItemSaved.InvokeAsync();
+        }
+        else
+        {
+            feedbackMessage = "No se pudo guardar el artículo. Verifica que el SKU no esté duplicado y que la API esté disponible.";
+            feedbackClass = "alert alert-danger";
+        }
+    }
+}

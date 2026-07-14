@@ -1,0 +1,34 @@
+﻿@page "/"
+
+<PageTitle>Home</PageTitle>
+
+<div class="container mt-4">
+    <div class="row gx-4 gy-4">
+        <div class="col-12">
+            <div class="p-4 rounded shadow-sm bg-white">
+                <h1>Bienvenido al Inventario</h1>
+                <p class="lead">Usa el dashboard para ver, agregar y administrar los artículos de inventario.</p>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h3 class="card-title">🚀 Acceso rápido</h3>
+                    <p class="card-text">Abre el panel de inventario para registrar nuevos artículos y revisar el inventario existente.</p>
+                    <NavLink class="btn btn-primary" href="inventory">Abrir Inventario</NavLink>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-md-6">
+            <div class="card h-100 shadow-sm">
+                <div class="card-body">
+                    <h3 class="card-title">📈 Valor total</h3>
+                    <p class="card-text">El dashboard de inventario calcula automáticamente el valor total de los artículos.</p>
+                    <p class="text-muted">Asegúrate de que el servicio de API esté en ejecución para que el dashboard cargue los datos.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

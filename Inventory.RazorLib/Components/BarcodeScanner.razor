@@ -1,0 +1,96 @@
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <div>
+                <strong>Barcode Scanner</strong>
+                <div class="form-text">Use the phone or laptop camera to scan codes.</div>
+            </div>
+            <button class="btn btn-sm @(isScanning ? "btn-danger" : "btn-primary")" @onclick="ToggleScanner">
+                @(isScanning ? "Stop scanner" : "Start scanner")
+            </button>
+        </div>
+
+        @if (isScanning)
+        {
+            <div class="ratio ratio-16x9 mb-3">
+                <video id="@VideoElementId" autoplay muted playsinline></video>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(LastScan))
+        {
+            <div class="alert alert-success mb-0" role="alert">
+                Scanned: <strong>@LastScan</strong>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public EventCallback<string> OnScanned { get; set; }
+
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+
+    private bool isScanning;
+    private string LastScan = string.Empty;
+    private string VideoElementId = $"barcodeVideo_{Guid.NewGuid():N}";
+    private IJSObjectReference? module;
+    private DotNetObjectReference<BarcodeScanner>? dotNetRef;
+
+    private async Task ToggleScanner()
+    {
+        if (isScanning)
+        {
+            await StopScanner();
+        }
+        else
+        {
+            await StartScanner();
+        }
+    }
+
+    private async Task StartScanner()
+    {
+        module ??= await JS.InvokeAsync<IJSObjectReference>("import", "/_content/Inventory.RazorLib/barcodeScanner.js");
+        dotNetRef = DotNetObjectReference.Create(this);
+        await module.InvokeVoidAsync("startBarcodeScanner", VideoElementId, dotNetRef);
+        isScanning = true;
+    }
+
+    private async Task StopScanner()
+    {
+        if (module != null)
+        {
+            await module.InvokeVoidAsync("stopBarcodeScanner", VideoElementId);
+        }
+
+        dotNetRef?.Dispose();
+        dotNetRef = null;
+        isScanning = false;
+    }
+
+    [JSInvokable]
+    public async Task OnBarcodeScanned(string code)
+    {
+        LastScan = code;
+        await StopScanner();
+        await OnScanned.InvokeAsync(code);
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (isScanning)
+        {
+            await StopScanner();
+        }
+
+        if (module != null)
+        {
+            await module.DisposeAsync();
+        }
+    }
+}

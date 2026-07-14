@@ -1,0 +1,130 @@
+﻿@page "/inventory"
+@using Inventory.Core.Classes
+@using Inventory.Core.Enums
+@using Inventory.RazorLib.Services
+@using Inventory.RazorLib.Components
+@inject ItemApiService ApiService
+
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>📊 Universal Inventory Management</h2>
+        <div class="alert alert-info m-0 py-2">
+            <strong>Total Inventory Value:</strong>
+            @foreach (var total in totalValueByCurrency)
+            {
+                <div>
+                    @total.Key @total.Value.totalValue.ToString("N2")
+                    @if (total.Value.totalValueBs > 0)
+                    {
+                        <span class="text-muted">(Bs @total.Value.totalValueBs.ToString("N2"))</span>
+                    }
+                </div>
+            }
+        </div>
+    </div>
+
+    <ItemForm OnItemSaved="LoadData" />
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-striped align-middle mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>SKU</th>
+                            <th>Name</th>
+                            <th>Category</th>
+                            <th>Stock</th>
+                            <th>Unit Price</th>
+                            <th>Currency</th>
+                            <th>Total Value</th>
+                            <th>Total Value (Bs)</th>
+                            <th>Specifications (Attributes)</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!items.Any())
+                        {
+                            <tr>
+                                <td colspan="9" class="text-center text-muted py-4">No items registered in the inventory.</td>
+                            </tr>
+                        }
+                        else
+                        {
+                            @foreach (var item in items)
+                            {
+                                <tr>
+                                    <td><span class="badge bg-secondary">@item.SKU</span></td>
+                                    <td><strong>@item.Name</strong></td>
+                                    <td><span class="badge bg-info text-dark">@item.Category?.Name</span></td>
+                                    <td>@item.Stock <small class="text-muted">@item.Unit</small></td>
+                                    <td>@(item.Currency?.Symbol ?? string.Empty)@item.Price.ToString("N2")</td>
+                                    <td>@item.Currency?.Code</td>
+                                    <td><strong>@(item.Currency?.Symbol ?? string.Empty)@item.CalculateInventoryValue().ToString("N2")</strong></td>
+                                    <td>
+                                        @if (item.Currency?.ExchangeRate != null)
+                                        {
+                                            <strong>Bs @( (item.CalculateInventoryValue() * item.Currency.ExchangeRate.Value).ToString("N2") )</strong>
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">No rate</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @foreach (var attr in item.Attributes)
+                                        {
+                                            <small class="d-block text-truncate" style="max-width: 250px;">
+                                                <span class="text-muted">@attr.Name:</span> <strong>@attr.Value</strong>
+                                            </small>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        <button class="btn btn-danger btn-sm" @onclick="() => DeleteItem(item.SKU)">🗑️</button>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<ItemUniversal> items = new();
+    private Dictionary<string, (decimal totalValue, decimal totalValueBs)> totalValueByCurrency = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        items = await ApiService.GetItemsAsync();
+        totalValueByCurrency = items
+            .Where(i => i.Currency != null)
+            .GroupBy(i => i.Currency!.Code)
+            .ToDictionary(
+                g => g.Key,
+                g => (
+                    totalValue: g.Sum(i => i.CalculateInventoryValue()),
+                    totalValueBs: g.Sum(i => i.CalculateInventoryValue() * (i.Currency?.ExchangeRate ?? 0m))
+                )
+            );
+    }
+
+    private async Task DeleteItem(string id)
+    {
+        var confirmed = await Task.FromResult(true); // Reemplazar por popup nativo si se requiere
+        if (confirmed)
+        {
+            await ApiService.DeleteItemAsync(id);
+            await LoadData();
+        }
+    }
+
+}
