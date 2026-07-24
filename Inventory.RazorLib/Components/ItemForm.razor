@@ -5,9 +5,10 @@
 @inject ItemApiService ApiService
 @inject CurrencyApiService CurrencyService
 @inject CategoryApiService CategoryService
+@inject TaxApiService TaxService
     
 <div class="card p-4 shadow-sm mb-4">
-    <h3 class="card-title text-primary">📦 Register New Item</h3>
+    <h3 class="card-title text-primary">@(isEditing ? "✏️ Editar producto" : "📦 Register New Item")</h3>
     <hr />
 
     <EditForm Model="@newItem" OnValidSubmit="HandleSubmit">
@@ -41,17 +42,25 @@
                     <div class="form-text">Preview: <strong>@PreviewSku</strong></div>
                 }
             </div>
+            <div class="col-md-4">
+                <label class="form-label">Código de barras</label>
+                <input class="form-control" @bind="newItem.Barcode" placeholder="Escanea o escribe el código" />
+                <div class="form-text">Se guarda con el producto para escanearlo en notas.</div>
+            </div>
             <div class="col-md-12">
                 <BarcodeScanner OnScanned="HandleBarcodeScanned" />
             </div>
-            <div class="col-md-2">
-                <label class="form-label">Prefix</label>
-                <input class="form-control" @bind="skuPrefix" placeholder="SKU" disabled="@(!autoGenerateSku)" />
-            </div>
-            <div class="col-md-2">
-                <label class="form-label">Digits</label>
-                <input type="number" class="form-control" @bind="skuDigits" min="1" max="12" disabled="@(!autoGenerateSku)" />
-            </div>
+            @if (!autoGenerateSku)
+            {
+                <div class="col-md-2">
+                    <label class="form-label">Prefix</label>
+                    <input class="form-control" @bind="skuPrefix" placeholder="SKU" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Digits</label>
+                    <input type="number" class="form-control" @bind="skuDigits" min="1" max="12" />
+                </div>
+            }
             <div class="col-md-3">
                 <label class="form-label">Category</label>
                 <select class="form-select" @bind="newItem.CategoryId">
@@ -95,11 +104,73 @@
                     }
                 </select>
             </div>
-            <div class="col-md-6">
+            <div class="col-md-4">
                 <label class="form-label">Price</label>
                 <input type="number" step="0.01" class="form-control" @bind="newItem.Price" required />
             </div>
-            <div class="col-md-6">
+            <div class="col-12">
+                <h6 class="mt-3">📌 Precios adicionales</h6>
+                <div class="row g-2 align-items-center mb-2">
+                    <div class="col-sm-4">
+                        <input class="form-control form-control-sm" placeholder="Label (e.g., Retail, Wholesale)" @bind="newPriceLabel" />
+                    </div>
+                    <div class="col-sm-3">
+                        <input type="number" step="0.01" class="form-control form-control-sm" placeholder="Amount" @bind="newPriceAmount" />
+                    </div>
+                    <div class="col-sm-3">
+                        <select class="form-select form-select-sm" @bind="newPriceCurrencyId">
+                            @if (currencies.Any())
+                            {
+                                @foreach (var c in currencies)
+                                {
+                                    <option value="@c.Id">@c.Code</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="col-sm-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm w-100" @onclick="AddPriceVariant">➕ Add Price</button>
+                    </div>
+                </div>
+
+                @if (newItem.PriceVariants != null && newItem.PriceVariants.Any())
+                {
+                    <div class="mb-2">
+                        @foreach (var p in newItem.PriceVariants)
+                        {
+                            <span class="badge bg-light text-dark border me-2 p-2">
+                                <strong>@p.Label:</strong> @p.Amount @(" " + (currencies.FirstOrDefault(c => c.Id == p.CurrencyId)?.Code ?? string.Empty))
+                                <button type="button" class="btn-close ms-2" style="font-size: 0.6rem;" @onclick="() => RemovePriceVariant(p)"></button>
+                            </span>
+                        }
+                    </div>
+                }
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Apply Taxes</label>
+                @if (!taxes.Any())
+                {
+                    <div class="form-text text-muted">No taxes configured yet. Add taxes in the Taxes module.</div>
+                }
+                else
+                {
+                    <div class="border rounded p-2" style="max-height: 220px; overflow-y: auto;">
+                        @foreach (var tax in taxes)
+                        {
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="tax-@tax.Id"
+                                       checked="@selectedTaxIds.Contains(tax.Id)"
+                                       @onchange="e => ToggleTaxSelection(e, tax.Id)" />
+                                <label class="form-check-label" for="tax-@tax.Id">
+                                    @tax.Name (@tax.Rate.ToString("N2")%)
+                                </label>
+                            </div>
+                        }
+                    </div>
+                    <div class="form-text mt-2">Los impuestos se aplican desde la lista de impuestos; no es necesario ingresar una tasa manual.</div>
+                }
+            </div>
+            <div class="col-md-4">
                 <label class="form-label">Initial Stock</label>
                 <input type="number" step="0.1" class="form-control" @bind="newItem.Stock" required />
             </div>
@@ -131,19 +202,30 @@
             </div>
         }
 
-        <button type="submit" class="btn btn-primary mt-2 w-100">💾 Save Item to Inventory</button>
+        <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-primary mt-2 w-100">@(isEditing ? "💾 Guardar cambios" : "💾 Save Item to Inventory")</button>
+            <button type="button" class="btn btn-secondary mt-1 w-100" @onclick="() => OnCancel.InvokeAsync()">✖️ Cancelar</button>
+        </div>
     </EditForm>
 </div>
 
 @code {
     [Parameter] public EventCallback OnItemSaved { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public ItemUniversal? ItemToEdit { get; set; }
 
+    private bool isEditing;
 private ItemUniversal newItem = new();
     private List<ItemUniversal> existingItems = new();
     private List<Currency> currencies = new();
     private List<Category> categories = new();
+    private List<Tax> taxes = new();
+    private List<int> selectedTaxIds = new();
     private string newAttrKey = "";
     private string newAttrValue = "";
+    private string newPriceLabel = string.Empty;
+    private decimal newPriceAmount = 0m;
+    private int newPriceCurrencyId = 0;
     private bool autoGenerateSku = true;
     private string skuPrefix = string.Empty;
     private int skuDigits = 9;
@@ -154,7 +236,44 @@ private ItemUniversal newItem = new();
     {
         await LoadCurrencies();
         await LoadCategories();
+        await LoadTaxes();
         await LoadExistingItems();
+
+        if (ItemToEdit != null)
+        {
+            LoadItemForEditing(ItemToEdit);
+        }
+    }
+
+    private void LoadItemForEditing(ItemUniversal source)
+    {
+        isEditing = true;
+        autoGenerateSku = false;
+
+        // Trabajamos sobre una copia para no mutar el item de la lista si se cancela.
+        newItem = new ItemUniversal
+        {
+            Id = source.Id,
+            SKU = source.SKU,
+            Barcode = source.Barcode,
+            Name = source.Name,
+            Price = source.Price,
+            TaxRate = source.TaxRate,
+            CurrencyId = source.CurrencyId,
+            CategoryId = source.CategoryId,
+            Stock = source.Stock,
+            Unit = source.Unit,
+            Attributes = source.Attributes?.Select(a => new Inventory.Core.Classes.Attribute(a.Name, a.Value)).ToList()
+                         ?? new List<Inventory.Core.Classes.Attribute>(),
+            PriceVariants = source.PriceVariants?.Select(p => new Inventory.Core.Classes.PriceVariant
+            {
+                Label = p.Label,
+                Amount = p.Amount,
+                CurrencyId = p.CurrencyId
+            }).ToList() ?? new List<Inventory.Core.Classes.PriceVariant>()
+        };
+
+        selectedTaxIds = source.Taxes?.Select(t => t.Id).ToList() ?? new List<int>();
     }
 
     private async Task LoadCurrencies()
@@ -163,6 +282,7 @@ private ItemUniversal newItem = new();
         if (currencies.Any() && newItem.CurrencyId == 0)
         {
             newItem.CurrencyId = currencies.First().Id;
+            newPriceCurrencyId = newItem.CurrencyId;
         }
     }
 
@@ -173,6 +293,16 @@ private ItemUniversal newItem = new();
         {
             newItem.CategoryId = categories.First().Id;
         }
+
+        if (taxes.Any() && !selectedTaxIds.Any())
+        {
+            selectedTaxIds.Clear();
+        }
+    }
+
+    private async Task LoadTaxes()
+    {
+        taxes = await TaxService.GetTaxesAsync();
     }
 
     private async Task LoadExistingItems()
@@ -189,8 +319,9 @@ private ItemUniversal newItem = new();
 
     private async Task HandleBarcodeScanned(string code)
     {
-        autoGenerateSku = false;
-        newItem.SKU = code;
+        // El código escaneado es el código de barras físico del producto,
+        // no el SKU (que se autogenera de forma interna).
+        newItem.Barcode = code;
         await Task.CompletedTask;
     }
 
@@ -230,6 +361,46 @@ private ItemUniversal newItem = new();
         }
     }
 
+    private void AddPriceVariant()
+    {
+        if (string.IsNullOrWhiteSpace(newPriceLabel) || newPriceAmount <= 0 || newPriceCurrencyId == 0)
+            return;
+
+        newItem.PriceVariants.Add(new Inventory.Core.Classes.PriceVariant
+        {
+            Label = newPriceLabel.Trim(),
+            Amount = newPriceAmount,
+            CurrencyId = newPriceCurrencyId
+        });
+
+        newPriceLabel = string.Empty;
+        newPriceAmount = 0m;
+        newPriceCurrencyId = newItem.CurrencyId != 0 ? newItem.CurrencyId : 0;
+    }
+
+    private void RemovePriceVariant(Inventory.Core.Classes.PriceVariant p)
+    {
+        newItem.PriceVariants.Remove(p);
+    }
+
+    private void ToggleTaxSelection(ChangeEventArgs e, int taxId)
+    {
+        if (e.Value is bool isChecked)
+        {
+            if (isChecked)
+            {
+                if (!selectedTaxIds.Contains(taxId))
+                {
+                    selectedTaxIds.Add(taxId);
+                }
+            }
+            else
+            {
+                selectedTaxIds.Remove(taxId);
+            }
+        }
+    }
+
     private async Task HandleSubmit()
     {
         feedbackMessage = string.Empty;
@@ -240,10 +411,13 @@ private ItemUniversal newItem = new();
             newItem.SKU = PreviewSku;
         }
 
+        // Al editar permitimos stock 0 (un producto existente puede quedar sin existencias).
+        var stockInvalid = isEditing ? newItem.Stock < 0 : newItem.Stock <= 0;
+
         if (string.IsNullOrWhiteSpace(newItem.SKU)
             || string.IsNullOrWhiteSpace(newItem.Name)
             || newItem.Price <= 0
-            || newItem.Stock <= 0
+            || stockInvalid
             || newItem.CurrencyId == 0
             || newItem.CategoryId == 0)
         {
@@ -252,12 +426,21 @@ private ItemUniversal newItem = new();
             return;
         }
 
-        var success = await ApiService.SaveItemAsync(newItem);
+        newItem.Taxes = taxes.Where(t => selectedTaxIds.Contains(t.Id)).ToList();
+
+        var success = isEditing
+            ? await ApiService.UpdateItemAsync(newItem)
+            : await ApiService.SaveItemAsync(newItem);
+
         if (success)
         {
-            feedbackMessage = "Artículo guardado correctamente.";
+            feedbackMessage = isEditing ? "Cambios guardados correctamente." : "Artículo guardado correctamente.";
             feedbackClass = "alert alert-success";
-            newItem = new();
+            if (!isEditing)
+            {
+                newItem = new();
+                selectedTaxIds.Clear();
+            }
             await OnItemSaved.InvokeAsync();
         }
         else

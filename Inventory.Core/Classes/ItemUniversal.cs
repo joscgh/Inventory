@@ -13,19 +13,46 @@ namespace Inventory.Core.Classes
     {
         [Key]
         [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
-        public int Id { get; internal set; }
+        public int Id { get; set; }
         public string SKU { get; set; } = string.Empty; // Código único del producto
+        public string? Barcode { get; set; } // Código de barras físico (EAN/UPC/QR) escaneado
         public string Name { get; set; } = string.Empty;
         public decimal Price { get; set; }
+        public decimal TaxRate { get; set; }
+        public List<Tax> Taxes { get; set; } = new List<Tax>();
+
+        [NotMapped]
+        public decimal PriceWithTax
+        {
+            get
+            {
+                if (Price == 0) return 0;
+
+                if (Taxes != null && Taxes.Any())
+                {
+                    var multiplier = Taxes.Aggregate(1m, (current, tax) => current * (1 + tax.Rate / 100));
+                    return Price * multiplier;
+                }
+
+                return Price * (1 + TaxRate / 100);
+            }
+        }
+
+        [NotMapped]
+        public decimal EffectiveTaxRate => Price == 0 ? 0 : ((PriceWithTax / Price) - 1) * 100;
+
         public int CurrencyId { get; set; }
         public Currency? Currency { get; set; }
         public int CategoryId { get; set; }
         public Category? Category { get; set; }
         public double Stock { get; set; }
+        [NotMapped]
+        public decimal CommittedQuantity { get; set; }
         public UnitType Unit { get; set; }
 
         // Aquí ocurre la magia: Cualquier dato extra va en esta lista
         public List<Attribute> Attributes { get; set; } = new List<Attribute>();
+        public List<PriceVariant> PriceVariants { get; set; } = new List<PriceVariant>();
 
         public ItemUniversal() { }
         public ItemUniversal(string name, decimal price, double stock, UnitType unit, string sku, int currencyId, int categoryId)
@@ -58,11 +85,17 @@ namespace Inventory.Core.Classes
             return Price * (decimal)Stock;
         }
 
+        public decimal CalculateInventoryValueWithTax()
+        {
+            return PriceWithTax * (decimal)Stock;
+        }
+
         public void ShowTechnicalSheet()
         {
             Console.WriteLine($"=========================================");
             Console.WriteLine($"[{Category?.Name ?? "Uncategorized"}] {Name} (ID: {Id})");
-            Console.WriteLine($"Price: {Currency?.Symbol ?? string.Empty}{Price} | Stock: {Stock} {Unit}");
+            Console.WriteLine($"Price: {Currency?.Symbol ?? string.Empty}{Price} | Tax: {TaxRate}% | Price with tax: {Currency?.Symbol ?? string.Empty}{PriceWithTax}");
+            Console.WriteLine($"Stock: {Stock} {Unit}");
             Console.WriteLine($"Specifications:");
             foreach (var attr in Attributes)
             {

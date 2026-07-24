@@ -49,6 +49,15 @@ namespace Inventory.API.Controllers
             return NoContent();
         }
 
+        [HttpPost("{sku}/adjust-stock")]
+        public async Task<IActionResult> AdjustStock(string sku, [FromBody] StockAdjustmentRequest request)
+        {
+            if (request == null) return BadRequest("Adjustment request is required.");
+            var adjusted = await _service.AdjustStockAsync(sku, request.Delta, request.Reason, request.ReferenceType);
+            if (!adjusted) return NotFound($"Could not adjust stock. Item with SKU {sku} does not exist.");
+            return NoContent();
+        }
+
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(string id)
         {
@@ -63,5 +72,12 @@ namespace Inventory.API.Controllers
             var total = await _service.GetTotalInventoryValueAsync();
             return Ok(total);
         }
+    }
+
+    public class StockAdjustmentRequest
+    {
+        public double Delta { get; set; }
+        public string Reason { get; set; } = string.Empty;
+        public string ReferenceType { get; set; } = string.Empty;
     }
 }

@@ -6,24 +6,90 @@
 @inject ItemApiService ApiService
 
 <div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2>📊 Universal Inventory Management</h2>
-        <div class="alert alert-info m-0 py-2">
-            <strong>Total Inventory Value:</strong>
-            @foreach (var total in totalValueByCurrency)
-            {
-                <div>
-                    @total.Key @total.Value.totalValue.ToString("N2")
-                    @if (total.Value.totalValueBs > 0)
-                    {
-                        <span class="text-muted">(Bs @total.Value.totalValueBs.ToString("N2"))</span>
-                    }
-                </div>
-            }
+    <div class="page-header mb-4">
+        <div class="page-title-block">
+            <h2 class="mb-2">📊 Universal Inventory Management</h2>
+        </div>
+        <div class="page-actions">
+            <div class="alert alert-info m-0 py-2">
+                <strong>Total Inventory Value:</strong>
+                @foreach (var total in totalValueByCurrency)
+                {
+                    <div>
+                        @total.Key @total.Value.totalValue.ToString("N2")
+                        <span class="text-muted">(Tax incl. @total.Value.totalValueWithTax.ToString("N2"))</span>
+                        @if (total.Value.totalValueBs > 0)
+                        {
+                            <div class="ms-3 text-muted">Bs @total.Value.totalValueBs.ToString("N2")</div>
+                        }
+                        @if (total.Value.totalValueWithTaxBs > 0)
+                        {
+                            <div class="ms-3 text-muted">Bs tax incl. @total.Value.totalValueWithTaxBs.ToString("N2")</div>
+                        }
+                    </div>
+                }
+            </div>
         </div>
     </div>
 
-    <ItemForm OnItemSaved="LoadData" />
+    @if (!showForm)
+    {
+        <div class="mb-3">
+            <button class="btn btn-success" @onclick="StartCreate">➕ Agregar producto nuevo</button>
+        </div>
+    }
+    else
+    {
+        <ItemForm @key="itemToEdit?.Id ?? 0" ItemToEdit="itemToEdit" OnItemSaved="ItemSaved" OnCancel="HideForm" />
+    }
+
+    <div class="row g-2 mb-3 align-items-end">
+        <div class="col-12 col-md-8">
+            <input class="form-control" placeholder="Buscar por nombre, SKU o categoría..." @bind="searchTerm" />
+        </div>
+        <div class="col-12 col-md-4 text-md-end">
+            <small class="text-muted">Resultados: @FilteredItems.Count()</small>
+        </div>
+    </div>
+
+    @if (showAdjustmentForm && adjustmentItem != null)
+    {
+        <div class="card border-warning mb-3">
+            <div class="card-body">
+                <h5 class="card-title">Ajustar stock de <strong>@adjustmentItem.Name</strong> (@adjustmentItem.SKU)</h5>
+                <p class="mb-2">Cambio: <strong>@(adjustmentDelta > 0 ? $"+{adjustmentDelta}" : adjustmentDelta.ToString())</strong></p>
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label">Cantidad</label>
+                        <input type="number" step="0.1" class="form-control" @bind="adjustmentDelta" />
+                        <div class="form-text">Usa valor positivo para aumentar o negativo para disminuir stock.</div>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Motivo</label>
+                        <select class="form-select" @bind="adjustmentReason">
+                            <option value="Venta">Venta</option>
+                            <option value="Ajuste manual">Ajuste manual</option>
+                            <option value="Devolución">Devolución</option>
+                            <option value="Inventario físico">Inventario físico</option>
+                            <option value="Otro">Otro</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Referencia</label>
+                        <input class="form-control" @bind="adjustmentReferenceType" placeholder="Factura / Nota / Otro" />
+                    </div>
+                    <div class="col-md-3 d-flex gap-2">
+                        <button class="btn btn-success w-100" @onclick="ConfirmStockAdjustment">Confirmar</button>
+                        <button class="btn btn-outline-secondary w-100" @onclick="CancelStockAdjustment">Cancelar</button>
+                    </div>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(adjustmentFeedback))
+                {
+                    <div class="alert mt-3 @adjustmentFeedbackClass">@adjustmentFeedback</div>
+                }
+            </div>
+        </div>
+    }
 
     <div class="card shadow-sm">
         <div class="card-body p-0">
@@ -31,15 +97,19 @@
                 <table class="table table-hover table-striped align-middle mb-0">
                     <thead class="table-dark">
                         <tr>
-                            <th>SKU</th>
+                            @* <th>SKU</th> *@
                             <th>Name</th>
                             <th>Category</th>
                             <th>Stock</th>
+                            <th class="d-none d-md-table-cell">Comprometidos</th>
                             <th>Unit Price</th>
-                            <th>Currency</th>
-                            <th>Total Value</th>
-                            <th>Total Value (Bs)</th>
-                            <th>Specifications (Attributes)</th>
+                            <th class="d-none d-md-table-cell">Price List</th>
+                            <th>Price with Tax</th>
+                            <th class="d-none d-sm-table-cell">Currency</th>
+                            <th class="d-none d-md-table-cell">Total Value</th>
+                            <th class="d-none d-md-table-cell">Total Value (incl. tax)</th>
+                            <th class="d-none d-lg-table-cell">Total Value (Bs)</th>
+                            <th class="d-none d-md-table-cell">Specifications (Attributes)</th>
                             <th class="text-center">Actions</th>
                         </tr>
                     </thead>
@@ -47,22 +117,40 @@
                         @if (!items.Any())
                         {
                             <tr>
-                                <td colspan="9" class="text-center text-muted py-4">No items registered in the inventory.</td>
+                                <td colspan="13" class="text-center text-muted py-4">No items registered in the inventory.</td>
                             </tr>
                         }
                         else
                         {
-                            @foreach (var item in items)
+                            @foreach (var item in PagedItems)
                             {
                                 <tr>
-                                    <td><span class="badge bg-secondary">@item.SKU</span></td>
+                                    @* <td><span class="badge bg-secondary">@item.SKU</span></td> *@
                                     <td><strong>@item.Name</strong></td>
                                     <td><span class="badge bg-info text-dark">@item.Category?.Name</span></td>
                                     <td>@item.Stock <small class="text-muted">@item.Unit</small></td>
+                                    <td class="d-none d-md-table-cell">@item.CommittedQuantity</td>
                                     <td>@(item.Currency?.Symbol ?? string.Empty)@item.Price.ToString("N2")</td>
-                                    <td>@item.Currency?.Code</td>
-                                    <td><strong>@(item.Currency?.Symbol ?? string.Empty)@item.CalculateInventoryValue().ToString("N2")</strong></td>
-                                    <td>
+                                    <td class="d-none d-md-table-cell">
+                                        @if (item.PriceVariants?.Any() == true)
+                                        {
+                                            @foreach (var variant in item.PriceVariants)
+                                            {
+                                                <small class="d-block text-truncate" style="max-width: 250px;">
+                                                    <span class="text-muted">@variant.Label:</span> <strong>@variant.Amount.ToString("N2")</strong>
+                                                </small>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="text-muted">-</span>
+                                        }
+                                    </td>
+                                    <td>@(item.Currency?.Symbol ?? string.Empty)@item.PriceWithTax.ToString("N2")</td>
+                                    <td class="d-none d-sm-table-cell">@item.Currency?.Code</td>
+                                    <td class="d-none d-md-table-cell"><strong>@(item.Currency?.Symbol ?? string.Empty)@item.CalculateInventoryValue().ToString("N2")</strong></td>
+                                    <td class="d-none d-md-table-cell"><strong>@(item.Currency?.Symbol ?? string.Empty)@item.CalculateInventoryValueWithTax().ToString("N2")</strong></td>
+                                    <td class="d-none d-lg-table-cell">
                                         @if (item.Currency?.ExchangeRate != null)
                                         {
                                             <strong>Bs @( (item.CalculateInventoryValue() * item.Currency.ExchangeRate.Value).ToString("N2") )</strong>
@@ -72,7 +160,7 @@
                                             <span class="text-muted">No rate</span>
                                         }
                                     </td>
-                                    <td>
+                                    <td class="d-none d-md-table-cell">
                                         @foreach (var attr in item.Attributes)
                                         {
                                             <small class="d-block text-truncate" style="max-width: 250px;">
@@ -81,7 +169,13 @@
                                         }
                                     </td>
                                     <td class="text-center">
-                                        <button class="btn btn-danger btn-sm" @onclick="() => DeleteItem(item.SKU)">🗑️</button>
+                                        <div class="btn-group" role="group">
+                                            <button class="btn btn-outline-secondary btn-sm" title="Disminuir" @onclick="() => StartStockAdjustment(item, -1)">-</button>
+                                            <button class="btn btn-primary btn-sm" title="Editar" @onclick="() => StartEdit(item)">✏️</button>
+                                            <a class="btn btn-info btn-sm" title="Historial" href="/inventory/adjustments/@item.SKU">📜</a>
+                                            <button class="btn btn-danger btn-sm" title="Eliminar" @onclick="() => DeleteItem(item.SKU)">🗑️</button>
+                                            <button class="btn btn-outline-secondary btn-sm" title="Aumentar" @onclick="() => StartStockAdjustment(item, 1)">+</button>
+                                        </div>
                                     </td>
                                 </tr>
                             }
@@ -91,11 +185,58 @@
             </div>
         </div>
     </div>
+
+    <div class="summary-row mt-3">
+        <div class="d-flex align-items-center flex-wrap gap-2">
+            <label class="form-label mb-0">Items por página:</label>
+            <select class="form-select d-inline-block w-auto" @onchange="ChangePageSize">
+                <option value="5">5</option>
+                <option value="10" selected>10</option>
+                <option value="25">25</option>
+            </select>
+        </div>
+        <nav>
+            <ul class="pagination mb-0">
+                <li class="page-item @(currentPage == 1 ? "disabled" : "")"><a class="page-link" href="#" @onclick="PrevPage">«</a></li>
+                @for (int p = 1; p <= TotalPages; p++)
+                {
+                    <li class="page-item @(currentPage == p ? "active" : "")"><a class="page-link" href="#" @onclick="() => SetPage(p)">@p</a></li>
+                }
+                <li class="page-item @(currentPage == TotalPages ? "disabled" : "")"><a class="page-link" href="#" @onclick="NextPage">»</a></li>
+            </ul>
+        </nav>
+    </div>
 </div>
 
 @code {
     private List<ItemUniversal> items = new();
-    private Dictionary<string, (decimal totalValue, decimal totalValueBs)> totalValueByCurrency = new();
+    private Dictionary<string, (decimal totalValue, decimal totalValueWithTax, decimal totalValueBs, decimal totalValueWithTaxBs)> totalValueByCurrency = new();
+    private bool showForm = false;
+    private ItemUniversal? itemToEdit;
+    private bool showAdjustmentForm = false;
+    private ItemUniversal? adjustmentItem;
+    private double adjustmentDelta = 0;
+    private string adjustmentReason = "Venta";
+    private string adjustmentReferenceType = string.Empty;
+    private string adjustmentFeedback = string.Empty;
+    private string adjustmentFeedbackClass = string.Empty;
+    private int currentPage = 1;
+    private int pageSize = 10;
+
+    private string searchTerm = string.Empty;
+
+    private IEnumerable<ItemUniversal> FilteredItems => string.IsNullOrWhiteSpace(searchTerm)
+        ? items
+        : items.Where(i =>
+            (i.Name ?? string.Empty).Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+            || (i.SKU ?? string.Empty).Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+            || (i.Category?.Name ?? string.Empty).Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+            || i.Attributes.Any(a => (a.Name + " " + a.Value).Contains(searchTerm, StringComparison.OrdinalIgnoreCase))
+        );
+
+    private IEnumerable<ItemUniversal> PagedItems => FilteredItems.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+    private int TotalPages => items.Count == 0 ? 1 : (int)Math.Ceiling(items.Count / (double)pageSize);
 
     protected override async Task OnInitializedAsync()
     {
@@ -112,9 +253,65 @@
                 g => g.Key,
                 g => (
                     totalValue: g.Sum(i => i.CalculateInventoryValue()),
-                    totalValueBs: g.Sum(i => i.CalculateInventoryValue() * (i.Currency?.ExchangeRate ?? 0m))
+                    totalValueWithTax: g.Sum(i => i.CalculateInventoryValueWithTax()),
+                    totalValueBs: g.Sum(i => i.CalculateInventoryValue() * (i.Currency?.ExchangeRate ?? 0m)),
+                    totalValueWithTaxBs: g.Sum(i => i.CalculateInventoryValueWithTax() * (i.Currency?.ExchangeRate ?? 0m))
                 )
             );
+    }
+
+    private void StartCreate()
+    {
+        itemToEdit = null;
+        showForm = true;
+    }
+
+    private void StartEdit(ItemUniversal item)
+    {
+        itemToEdit = item;
+        showForm = true;
+    }
+
+    private async Task ItemSaved()
+    {
+        var wasCreating = itemToEdit == null;
+        showForm = false;
+        itemToEdit = null;
+        await LoadData();
+        if (wasCreating) currentPage = 1; // mostrar el nuevo producto desde el inicio
+        StateHasChanged();
+    }
+
+    private void HideForm()
+    {
+        showForm = false;
+        itemToEdit = null;
+    }
+
+    private void SetPage(int p)
+    {
+        if (p < 1) p = 1;
+        if (p > TotalPages) p = TotalPages;
+        currentPage = p;
+    }
+
+    private void PrevPage()
+    {
+        if (currentPage > 1) currentPage--;
+    }
+
+    private void NextPage()
+    {
+        if (currentPage < TotalPages) currentPage++;
+    }
+
+    private void ChangePageSize(ChangeEventArgs e)
+    {
+        if (int.TryParse(e?.Value?.ToString(), out var v) && v > 0)
+        {
+            pageSize = v;
+            currentPage = 1;
+        }
     }
 
     private async Task DeleteItem(string id)
@@ -124,6 +321,54 @@
         {
             await ApiService.DeleteItemAsync(id);
             await LoadData();
+        }
+    }
+
+    private void StartStockAdjustment(ItemUniversal item, double delta)
+    {
+        adjustmentItem = item;
+        adjustmentDelta = delta;
+        adjustmentReason = delta < 0 ? "Venta" : "Ajuste manual";
+        adjustmentReferenceType = string.Empty;
+        adjustmentFeedback = string.Empty;
+        adjustmentFeedbackClass = string.Empty;
+        showAdjustmentForm = true;
+    }
+
+    private void CancelStockAdjustment()
+    {
+        showAdjustmentForm = false;
+        adjustmentItem = null;
+    }
+
+    private async Task ConfirmStockAdjustment()
+    {
+        if (adjustmentItem == null)
+        {
+            adjustmentFeedback = "No hay producto seleccionado.";
+            adjustmentFeedbackClass = "alert alert-warning";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(adjustmentReason))
+        {
+            adjustmentFeedback = "Selecciona un motivo para el ajuste.";
+            adjustmentFeedbackClass = "alert alert-warning";
+            return;
+        }
+
+        var ok = await ApiService.AdjustStockAsync(adjustmentItem.SKU, adjustmentDelta, adjustmentReason, adjustmentReferenceType);
+        if (ok)
+        {
+            adjustmentFeedback = "Ajuste guardado correctamente.";
+            adjustmentFeedbackClass = "alert alert-success";
+            showAdjustmentForm = false;
+            await LoadData();
+        }
+        else
+        {
+            adjustmentFeedback = "No se pudo aplicar el ajuste. Intenta de nuevo.";
+            adjustmentFeedbackClass = "alert alert-danger";
         }
     }
 

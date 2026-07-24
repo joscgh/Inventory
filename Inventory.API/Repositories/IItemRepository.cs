@@ -8,6 +8,7 @@ namespace Inventory.API.Repositories
         Task<ItemUniversal?> GetByIdAsync(string SKU);
         Task AddAsync(ItemUniversal item);
         Task UpdateAsync(ItemUniversal item);
+        Task UpdateStockAsync(ItemUniversal item);
         Task DeleteAsync(string SKU);
     }
 }

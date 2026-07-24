@@ -12,8 +12,8 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Inventory.API.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    [Migration("20260714153053_AddCategory")]
-    partial class AddCategory
+    [Migration("20260721154538_AddInventoryAdjustmentsAndPriceVariants")]
+    partial class AddInventoryAdjustmentsAndPriceVariants
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -101,6 +101,52 @@ namespace Inventory.API.Migrations
                     b.ToTable("Currencies");
                 });
 
+            modelBuilder.Entity("Inventory.Core.Classes.InventoryAdjustment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<double>("Change")
+                        .HasColumnType("double precision");
+
+                    b.Property<int>("ItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<double>("NewStock")
+                        .HasColumnType("double precision");
+
+                    b.Property<double>("PreviousStock")
+                        .HasColumnType("double precision");
+
+                    b.Property<string>("Reason")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReferenceId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ReferenceType")
+                        .HasColumnType("text");
+
+                    b.Property<string>("SKU")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("User")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId");
+
+                    b.ToTable("Adjustments");
+                });
+
             modelBuilder.Entity("Inventory.Core.Classes.ItemUniversal", b =>
                 {
                     b.Property<int>("Id")
@@ -129,6 +175,9 @@ namespace Inventory.API.Migrations
                     b.Property<double>("Stock")
                         .HasColumnType("double precision");
 
+                    b.Property<decimal>("TaxRate")
+                        .HasColumnType("numeric");
+
                     b.Property<int>("Unit")
                         .HasColumnType("integer");
 
@@ -141,12 +190,89 @@ namespace Inventory.API.Migrations
                     b.ToTable("Items");
                 });
 
+            modelBuilder.Entity("Inventory.Core.Classes.PriceVariant", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("numeric");
+
+                    b.Property<int>("CurrencyId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId");
+
+                    b.ToTable("PriceVariants");
+                });
+
+            modelBuilder.Entity("Inventory.Core.Classes.Tax", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("Rate")
+                        .HasColumnType("numeric");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Taxes");
+                });
+
+            modelBuilder.Entity("ItemUniversalTax", b =>
+                {
+                    b.Property<int>("ItemsId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TaxesId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("ItemsId", "TaxesId");
+
+                    b.HasIndex("TaxesId");
+
+                    b.ToTable("ItemUniversalTax");
+                });
+
             modelBuilder.Entity("Inventory.Core.Classes.Attribute", b =>
                 {
                     b.HasOne("Inventory.Core.Classes.ItemUniversal", null)
                         .WithMany("Attributes")
                         .HasForeignKey("ItemUniversalId")
                         .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("Inventory.Core.Classes.InventoryAdjustment", b =>
+                {
+                    b.HasOne("Inventory.Core.Classes.ItemUniversal", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Item");
                 });
 
             modelBuilder.Entity("Inventory.Core.Classes.ItemUniversal", b =>
@@ -168,6 +294,32 @@ namespace Inventory.API.Migrations
                     b.Navigation("Currency");
                 });
 
+            modelBuilder.Entity("Inventory.Core.Classes.PriceVariant", b =>
+                {
+                    b.HasOne("Inventory.Core.Classes.ItemUniversal", "Item")
+                        .WithMany("PriceVariants")
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+                });
+
+            modelBuilder.Entity("ItemUniversalTax", b =>
+                {
+                    b.HasOne("Inventory.Core.Classes.ItemUniversal", null)
+                        .WithMany()
+                        .HasForeignKey("ItemsId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Inventory.Core.Classes.Tax", null)
+                        .WithMany()
+                        .HasForeignKey("TaxesId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Inventory.Core.Classes.Category", b =>
                 {
                     b.Navigation("Items");
@@ -181,6 +333,8 @@ namespace Inventory.API.Migrations
             modelBuilder.Entity("Inventory.Core.Classes.ItemUniversal", b =>
                 {
                     b.Navigation("Attributes");
+
+                    b.Navigation("PriceVariants");
                 });
 #pragma warning restore 612, 618
         }

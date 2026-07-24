@@ -1,0 +1,136 @@
+@page "/customer-account-users"
+@using Inventory.Core.Classes
+@using Inventory.RazorLib.Services
+@inject CustomerAccountApiService ApiService
+
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>👥 Usuarios de clientes</h2>
+            <p class="text-muted mb-0">Asigna usuarios administrativos a los clientes y sus cuentas.</p>
+        </div>
+        <a class="btn btn-outline-secondary" href="/inventory">← Volver al inventario</a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Agregar usuario a un cliente</h5>
+                    <div class="mb-3">
+                        <label class="form-label">Cuenta</label>
+                        <select class="form-select" @bind="selectedAccountId">
+                            <option value="0">Seleccione una cuenta</option>
+                            @foreach (var account in customerAccounts)
+                            {
+                                <option value="@account.Id">@account.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nombre completo</label>
+                        <input class="form-control" @bind="selectedUser.FullName" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Correo</label>
+                        <input class="form-control" type="email" @bind="selectedUser.Email" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Contraseña</label>
+                        <input class="form-control" type="password" @bind="selectedUserPassword" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Rol</label>
+                        <input class="form-control" @bind="selectedUser.Role" />
+                    </div>
+                    <button class="btn btn-primary" @onclick="AddUser">Agregar usuario</button>
+                    @if (!string.IsNullOrEmpty(message))
+                    {
+                        <div class="alert alert-info mt-3">@message</div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Usuarios existentes</h5>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Cuenta</th>
+                                    <th>Nombre</th>
+                                    <th>Email</th>
+                                    <th>Rol</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var account in customerAccounts)
+                                {
+                                    foreach (var user in account.Users)
+                                    {
+                                        <tr>
+                                            <td>@account.Name</td>
+                                            <td>@user.FullName</td>
+                                            <td>@user.Email</td>
+                                            <td>@user.Role</td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<CustomerAccount> customerAccounts = new();
+    private CustomerAccountUser selectedUser = new();
+    private int selectedAccountId;
+    private string selectedUserPassword = string.Empty;
+    private string message = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAccounts();
+    }
+
+    private async Task LoadAccounts()
+    {
+        customerAccounts = await ApiService.GetAccountsAsync();
+    }
+
+    private async Task AddUser()
+    {
+        message = string.Empty;
+        if (selectedAccountId == 0)
+        {
+            message = "Selecciona primero una cuenta.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(selectedUserPassword))
+        {
+            message = "La contraseña es obligatoria.";
+            return;
+        }
+
+        var (success, errorMessage) = await ApiService.AddUserAsync(selectedAccountId, new AddAccountUserRequest
+        {
+            FullName = selectedUser.FullName,
+            Email = selectedUser.Email,
+            Password = selectedUserPassword,
+            Role = selectedUser.Role
+        });
+
+        message = success ? "Usuario agregado correctamente." : errorMessage ?? "Error al agregar el usuario.";
+        selectedUser = new CustomerAccountUser();
+        selectedUserPassword = string.Empty;
+        await LoadAccounts();
+    }
+}

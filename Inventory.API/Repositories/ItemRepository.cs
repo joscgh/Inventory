@@ -15,11 +15,38 @@ namespace Inventory.API.Repositories
 
         public async Task<IEnumerable<ItemUniversal>> GetAllAsync()
         {
-            return await _context.Items
+            var items = await _context.Items
                 .Include(i => i.Attributes)
                 .Include(i => i.Currency)
                 .Include(i => i.Category)
+                .Include(i => i.Taxes)
+                .Include(i => i.PriceVariants)
                 .ToListAsync();
+
+            // Comprometido = entregado (reserva) menos acreditado (la nota de crédito
+            // se emite contra una entrega y libera la reserva).
+            var committedTotals = await _context.NoteLines
+                .Where(nl => nl.ItemUniversalId.HasValue)
+                .Join(
+                    _context.Notes.Where(n => n.Type == NoteType.Entrega || n.Type == NoteType.Credito),
+                    nl => nl.NoteId,
+                    n => n.Id,
+                    (nl, n) => new
+                    {
+                        ItemId = nl.ItemUniversalId!.Value,
+                        Committed = n.Type == NoteType.Credito ? -nl.CommittedQuantity : nl.CommittedQuantity
+                    })
+                .GroupBy(x => x.ItemId)
+                .Select(g => new { ItemId = g.Key, TotalCommitted = g.Sum(x => x.Committed) })
+                .ToDictionaryAsync(g => g.ItemId, g => g.TotalCommitted);
+
+            foreach (var item in items)
+            {
+                var total = committedTotals.TryGetValue(item.Id, out var value) ? value : 0m;
+                item.CommittedQuantity = total < 0m ? 0m : total;
+            }
+
+            return items;
         }
 
         public async Task<ItemUniversal?> GetByIdAsync(string SKU)
@@ -28,11 +55,25 @@ namespace Inventory.API.Repositories
                 .Include(i => i.Attributes)
                 .Include(i => i.Currency)
                 .Include(i => i.Category)
+                .Include(i => i.Taxes)
+                .Include(i => i.PriceVariants)
                 .FirstOrDefaultAsync(i => i.SKU == SKU);
         }
 
         public async Task AddAsync(ItemUniversal item)
         {
+            if (item.Taxes != null && item.Taxes.Any())
+            {
+                var taxIds = item.Taxes
+                    .Where(t => t.Id != 0)
+                    .Select(t => t.Id)
+                    .ToList();
+
+                item.Taxes = await _context.Taxes
+                    .Where(t => taxIds.Contains(t.Id))
+                    .ToListAsync();
+            }
+
             await _context.Items.AddAsync(item);
             await _context.SaveChangesAsync();
         }
@@ -42,6 +83,8 @@ namespace Inventory.API.Repositories
             // Para actualizar relaciones dinámicas limpiamente, removemos los anteriores y agregamos los nuevos
             var existingItem = await _context.Items
                 .Include(i => i.Attributes)
+                .Include(i => i.Taxes)
+                .Include(i => i.PriceVariants)
                 .FirstOrDefaultAsync(i => i.Id == item.Id);
 
             if (existingItem != null)
@@ -50,6 +93,53 @@ namespace Inventory.API.Repositories
                 existingItem.Attributes.Clear();
                 existingItem.Attributes.AddRange(item.Attributes);
 
+                existingItem.Taxes.Clear();
+                if (item.Taxes != null && item.Taxes.Any())
+                {
+                    var taxIds = item.Taxes
+                        .Where(t => t.Id != 0)
+                        .Select(t => t.Id)
+                        .ToList();
+
+                    var taxes = await _context.Taxes
+                        .Where(t => taxIds.Contains(t.Id))
+                        .ToListAsync();
+
+                    foreach (var tax in taxes)
+                    {
+                        existingItem.Taxes.Add(tax);
+                    }
+                }
+
+                // Update price variants
+                existingItem.PriceVariants.Clear();
+                if (item.PriceVariants != null && item.PriceVariants.Any())
+                {
+                    foreach (var p in item.PriceVariants)
+                    {
+                        existingItem.PriceVariants.Add(new Core.Classes.PriceVariant
+                        {
+                            Label = p.Label,
+                            Amount = p.Amount,
+                            CurrencyId = p.CurrencyId
+                        });
+                    }
+                }
+
+                await _context.SaveChangesAsync();
+            }
+        }
+
+        public async Task UpdateStockAsync(ItemUniversal item)
+        {
+            // Ajuste de stock: solo tocamos el escalar Stock para NO alterar
+            // relaciones dinámicas (PriceVariants, Taxes, Attributes).
+            var existingItem = await _context.Items
+                .FirstOrDefaultAsync(i => i.Id == item.Id);
+
+            if (existingItem != null)
+            {
+                existingItem.Stock = item.Stock;
                 await _context.SaveChangesAsync();
             }
         }

@@ -13,12 +13,25 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<IItemRepository, ItemRepository>();
 builder.Services.AddScoped<IItemService, ItemService>();
+builder.Services.AddScoped<IAdjustmentRepository, AdjustmentRepository>();
 
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 
 builder.Services.AddScoped<ICurrencyRepository, CurrencyRepository>();
 builder.Services.AddScoped<ICurrencyService, CurrencyService>();
+
+builder.Services.AddScoped<ITaxRepository, TaxRepository>();
+builder.Services.AddScoped<ITaxService, TaxService>();
+
+builder.Services.AddScoped<INoteRepository, NoteRepository>();
+builder.Services.AddScoped<INoteService, NoteService>();
+
+builder.Services.AddScoped<ICustomerAccountRepository, CustomerAccountRepository>();
+builder.Services.AddScoped<ICustomerAccountService, CustomerAccountService>();
+builder.Services.AddScoped<ICustomerAccountUserRepository, CustomerAccountUserRepository>();
+builder.Services.AddScoped<ICustomerAccountUserService, CustomerAccountUserService>();
+
 builder.Services.AddHttpClient<IExchangeRateScraper, BcvExchangeRateScraper>(client =>
 {
     client.BaseAddress = new Uri("https://www.bcv.org.ve/");
@@ -56,6 +69,7 @@ using (var scope = app.Services.CreateScope())
         var context = services.GetRequiredService<AppDbContext>();
 
         // Usa migraciones EF Core para mantener el esquema de la BD actualizado.
+        context.Database.EnsureCreated();
         context.Database.Migrate();
     }
     catch (Exception ex)

@@ -1,0 +1,143 @@
+@page "/customer-accounts"
+@using Inventory.Core.Classes
+@using Inventory.RazorLib.Services
+@inject CustomerAccountApiService ApiService
+
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>🧾 Clientes que compran / consumen</h2>
+            <p class="text-muted mb-0">Administra los clientes reales del negocio y los usuarios asociados a cada cuenta.</p>
+        </div>
+        <a class="btn btn-outline-secondary" href="/inventory">← Volver al inventario</a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Nuevo cliente</h5>
+                    <div class="mb-3">
+                        <label class="form-label">Nombre de la cuenta</label>
+                        <input class="form-control" @bind="accountForm.Name" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Documento</label>
+                        <input class="form-control" @bind="accountForm.Document" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Dirección</label>
+                        <input class="form-control" @bind="accountForm.Address" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Correo</label>
+                        <input class="form-control" @bind="accountForm.Email" type="email" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Teléfono</label>
+                        <input class="form-control" @bind="accountForm.Phone" />
+                    </div>
+                    <button class="btn btn-primary" @onclick="SaveAccount">Guardar cuenta</button>
+                    @if (!string.IsNullOrEmpty(message))
+                    {
+                        <div class="alert alert-info mt-3">@message</div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Lista de clientes</h5>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Nombre</th>
+                                    <th>Email</th>
+                                    <th class="text-end">Usuarios</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var account in customerAccounts)
+                                {
+                                    <tr>
+                                        <td>@account.Name</td>
+                                        <td>@account.Email</td>
+                                        <td class="text-end">@account.Users.Count</td>
+                                        <td class="text-end">
+                                            <button class="btn btn-sm btn-outline-secondary me-2" @onclick="() => EditAccount(account)">Editar</button>
+                                            <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteAccount(account.Id)">Borrar</button>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<CustomerAccount> customerAccounts = new();
+    private CustomerAccount accountForm = new();
+    private string message = string.Empty;
+    private int editAccountId = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAccounts();
+    }
+
+    private async Task LoadAccounts()
+    {
+        customerAccounts = await ApiService.GetAccountsAsync();
+    }
+
+    private async Task SaveAccount()
+    {
+        message = string.Empty;
+
+        if (editAccountId == 0)
+        {
+            var (success, errorMessage) = await ApiService.SaveAccountAsync(accountForm);
+            message = success ? "Cuenta creada correctamente." : errorMessage ?? "Error al crear la cuenta. Verifica los datos.";
+        }
+        else
+        {
+            accountForm.Id = editAccountId;
+            var success = await ApiService.UpdateAccountAsync(accountForm);
+            message = success ? "Cuenta actualizada correctamente." : "Error al actualizar la cuenta.";
+            editAccountId = 0;
+        }
+
+        accountForm = new CustomerAccount();
+        await LoadAccounts();
+    }
+
+    private void EditAccount(CustomerAccount account)
+    {
+        editAccountId = account.Id;
+        accountForm = new CustomerAccount
+        {
+            Id = account.Id,
+            Name = account.Name,
+            Document = account.Document,
+            Address = account.Address,
+            Email = account.Email,
+            Phone = account.Phone,
+            Users = account.Users
+        };
+    }
+
+    private async Task DeleteAccount(int id)
+    {
+        await ApiService.DeleteAccountAsync(id);
+        await LoadAccounts();
+    }
+}

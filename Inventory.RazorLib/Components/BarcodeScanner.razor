@@ -20,9 +20,14 @@
             </div>
         }
 
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="alert alert-warning mb-0" role="alert">@errorMessage</div>
+        }
+
         @if (!string.IsNullOrEmpty(LastScan))
         {
-            <div class="alert alert-success mb-0" role="alert">
+            <div class="alert alert-success mb-0 mt-2" role="alert">
                 Scanned: <strong>@LastScan</strong>
             </div>
         }
@@ -35,7 +40,9 @@
     [Inject] private IJSRuntime JS { get; set; } = default!;
 
     private bool isScanning;
+    private bool startRequested;
     private string LastScan = string.Empty;
+    private string errorMessage = string.Empty;
     private string VideoElementId = $"barcodeVideo_{Guid.NewGuid():N}";
     private IJSObjectReference? module;
     private DotNetObjectReference<BarcodeScanner>? dotNetRef;
@@ -48,28 +55,56 @@
         }
         else
         {
+            // Solo marcamos el estado; el escáner se arranca en OnAfterRenderAsync,
+            // cuando el elemento <video> ya existe en el DOM.
+            errorMessage = string.Empty;
+            LastScan = string.Empty;
+            isScanning = true;
+            startRequested = true;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (startRequested)
+        {
+            startRequested = false;
             await StartScanner();
         }
     }
 
     private async Task StartScanner()
     {
-        module ??= await JS.InvokeAsync<IJSObjectReference>("import", "/_content/Inventory.RazorLib/barcodeScanner.js");
-        dotNetRef = DotNetObjectReference.Create(this);
-        await module.InvokeVoidAsync("startBarcodeScanner", VideoElementId, dotNetRef);
-        isScanning = true;
+        try
+        {
+            module ??= await JS.InvokeAsync<IJSObjectReference>("import", "/_content/Inventory.RazorLib/barcodeScanner.js");
+            dotNetRef ??= DotNetObjectReference.Create(this);
+            await module.InvokeVoidAsync("startBarcodeScanner", VideoElementId, dotNetRef);
+        }
+        catch (Exception ex)
+        {
+            errorMessage = "No se pudo iniciar el escáner: " + ex.Message;
+            isScanning = false;
+            StateHasChanged();
+        }
     }
 
     private async Task StopScanner()
     {
-        if (module != null)
+        try
         {
-            await module.InvokeVoidAsync("stopBarcodeScanner", VideoElementId);
+            if (module != null)
+            {
+                await module.InvokeVoidAsync("stopBarcodeScanner", VideoElementId);
+            }
+        }
+        catch
+        {
+            // Ignorar errores al detener (p. ej. si el módulo aún no cargó).
         }
 
-        dotNetRef?.Dispose();
-        dotNetRef = null;
         isScanning = false;
+        StateHasChanged();
     }
 
     [JSInvokable]
@@ -81,16 +116,29 @@
         StateHasChanged();
     }
 
+    [JSInvokable]
+    public void OnScannerError(string message)
+    {
+        errorMessage = message;
+        isScanning = false;
+        StateHasChanged();
+    }
+
     public async ValueTask DisposeAsync()
     {
-        if (isScanning)
+        try
         {
-            await StopScanner();
+            if (module != null)
+            {
+                await module.InvokeVoidAsync("stopBarcodeScanner", VideoElementId);
+                await module.DisposeAsync();
+            }
+        }
+        catch
+        {
+            // Ignorar errores de limpieza durante el descarte del componente.
         }
 
-        if (module != null)
-        {
-            await module.DisposeAsync();
-        }
+        dotNetRef?.Dispose();
     }
 }

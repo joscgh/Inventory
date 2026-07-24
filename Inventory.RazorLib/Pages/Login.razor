@@ -1,0 +1,130 @@
+@page "/login"
+@using Inventory.Core.Classes
+@using Inventory.RazorLib.Services
+@inject AuthApiService AuthService
+@inject UserStateService UserState
+@inject NavigationManager Navigation
+
+<div class="container-fluid mt-4">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4>@(isRegistering ? "Crear cuenta" : "Iniciar sesión")</h4>
+                        <button class="btn btn-link" @onclick="ToggleRegister">
+                            @(isRegistering ? "¿Ya tienes cuenta? Inicia sesión" : "¿No tienes cuenta? Regístrate")
+                        </button>
+                    </div>
+
+                    @if (!isRegistering)
+                    {
+                        <div class="mb-3">
+                            <label class="form-label">Correo</label>
+                            <input class="form-control" @bind="loginRequest.Email" type="email" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Contraseña</label>
+                            <input class="form-control" @bind="loginRequest.Password" type="password" />
+                        </div>
+                        <button class="btn btn-primary" @onclick="HandleLogin">Ingresar</button>
+                    }
+                    else
+                    {
+                        <div class="row gx-3">
+                            <div class="col-md-6">
+                                <h5>Datos de la cuenta</h5>
+                                <div class="mb-3">
+                                    <label class="form-label">Nombre de la cuenta</label>
+                                    <input class="form-control" @bind="registerRequest.AccountName" />
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Documento</label>
+                                    <input class="form-control" @bind="registerRequest.AccountDocument" />
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Dirección</label>
+                                    <input class="form-control" @bind="registerRequest.AccountAddress" />
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Correo de la cuenta</label>
+                                    <input class="form-control" type="email" @bind="registerRequest.AccountEmail" />
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Teléfono</label>
+                                    <input class="form-control" @bind="registerRequest.AccountPhone" />
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <h5>Datos del usuario</h5>
+                                <div class="mb-3">
+                                    <label class="form-label">Nombre completo</label>
+                                    <input class="form-control" @bind="registerRequest.FullName" />
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Correo</label>
+                                    <input class="form-control" type="email" @bind="registerRequest.Email" />
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Contraseña</label>
+                                    <input class="form-control" type="password" @bind="registerRequest.Password" />
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Rol</label>
+                                    <input class="form-control" @bind="registerRequest.Role" />
+                                </div>
+                                <button class="btn btn-primary" @onclick="HandleRegister">Crear cuenta</button>
+                            </div>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(message))
+                    {
+                        <div class="alert alert-danger mt-3">@message</div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private LoginRequest loginRequest = new();
+    private RegisterAccountRequest registerRequest = new();
+    private string message = string.Empty;
+    private bool isRegistering;
+
+    private void ToggleRegister()
+    {
+        message = string.Empty;
+        isRegistering = !isRegistering;
+    }
+
+    private async Task HandleLogin()
+    {
+        message = string.Empty;
+        var result = await AuthService.LoginAsync(loginRequest);
+        if (result == null)
+        {
+            message = "Credenciales inválidas.";
+            return;
+        }
+
+        await UserState.SetCurrentUserAsync(result);
+        Navigation.NavigateTo("/inventory", true);
+    }
+
+    private async Task HandleRegister()
+    {
+        message = string.Empty;
+        var (result, errorMessage) = await AuthService.RegisterAsync(registerRequest);
+        if (result == null)
+        {
+            message = errorMessage ?? "No se pudo crear la cuenta. Verifica los datos y prueba de nuevo.";
+            return;
+        }
+
+        await UserState.SetCurrentUserAsync(result);
+        Navigation.NavigateTo("/inventory", true);
+    }
+}
