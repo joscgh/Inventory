@@ -19,6 +19,7 @@
             <thead>
                 <tr>
                     <th>Timestamp</th>
+                    <th>Depósito / Tienda</th>
                     <th>Change</th>
                     <th>Previous</th>
                     <th>New</th>
@@ -32,6 +33,7 @@
                 {
                     <tr>
                         <td>@a.Timestamp.ToLocalTime().ToString("g")</td>
+                        <td>@(a.Location?.Name ?? "—")</td>
                         <td>@a.Change</td>
                         <td>@a.PreviousStock</td>
                         <td>@a.NewStock</td>

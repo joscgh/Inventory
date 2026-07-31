@@ -1,0 +1,234 @@
+@page "/account-locations"
+@using Inventory.Core.Classes
+@using Inventory.Core.Enums
+@using Inventory.RazorLib.Services
+@using Microsoft.AspNetCore.Components
+@inject CustomerAccountApiService ApiService
+
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>🏬 Depósitos y tiendas</h2>
+            <p class="text-muted mb-0">Registra los depósitos o almacenes y las tiendas de cada cuenta, con su dirección, RIF y teléfono.</p>
+        </div>
+        <a class="btn btn-outline-secondary" href="/customer-accounts">← Volver a cuentas</a>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <label class="form-label">Cuenta</label>
+            <select class="form-select" value="@selectedAccountId" @onchange="OnAccountChanged">
+                <option value="0">Seleccione una cuenta</option>
+                @foreach (var account in customerAccounts)
+                {
+                    <option value="@account.Id">@account.Name</option>
+                }
+            </select>
+        </div>
+    </div>
+
+    @if (selectedAccountId == 0)
+    {
+        <div class="alert alert-secondary">Selecciona una cuenta para administrar sus depósitos y tiendas.</div>
+    }
+    else
+    {
+        <div class="row g-4">
+            <div class="col-lg-5">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">
+                            @(editLocationId == 0 ? "Nuevo depósito / tienda" : $"Modificar #{editLocationId}")
+                        </h5>
+                        <div class="mb-3">
+                            <label class="form-label">Tipo</label>
+                            <select class="form-select" @bind="locationForm.Type">
+                                <option value="@LocationType.Warehouse">Depósito / Almacén</option>
+                                <option value="@LocationType.Store">Tienda</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Nombre</label>
+                            <input class="form-control" @bind="locationForm.Name" placeholder="Ej. Depósito Principal" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Dirección</label>
+                            <input class="form-control" @bind="locationForm.Address" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">RIF</label>
+                            <input class="form-control" @bind="locationForm.Rif" placeholder="J-12345678-9" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Teléfono</label>
+                            <input class="form-control" @bind="locationForm.Phone" />
+                        </div>
+                        <button class="btn btn-primary" @onclick="SaveLocation">
+                            @(editLocationId == 0 ? "Registrar" : "Guardar cambios")
+                        </button>
+                        @if (editLocationId != 0)
+                        {
+                            <button class="btn btn-outline-secondary ms-2" @onclick="CancelEdit">Cancelar</button>
+                        }
+                        @if (!string.IsNullOrEmpty(message))
+                        {
+                            <div class="alert alert-info mt-3">@message</div>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-7">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title">Registrados</h5>
+                        @if (!locations.Any())
+                        {
+                            <p class="text-muted mb-0">Esta cuenta todavía no tiene depósitos ni tiendas.</p>
+                        }
+                        else
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Tipo</th>
+                                            <th>Nombre</th>
+                                            <th>Dirección</th>
+                                            <th>RIF</th>
+                                            <th>Teléfono</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        @foreach (var location in locations)
+                                        {
+                                            <tr>
+                                                <td>
+                                                    <span class="badge @(location.Type == LocationType.Warehouse ? "bg-secondary" : "bg-info")">
+                                                        @TypeLabel(location.Type)
+                                                    </span>
+                                                </td>
+                                                <td>@location.Name</td>
+                                                <td>@location.Address</td>
+                                                <td>@location.Rif</td>
+                                                <td>@location.Phone</td>
+                                                <td class="text-end text-nowrap">
+                                                    <button class="btn btn-sm btn-outline-secondary me-2" @onclick="() => EditLocation(location)">Editar</button>
+                                                    <button class="btn btn-sm btn-outline-danger" @onclick="() => DeleteLocation(location.Id)">Borrar</button>
+                                                </td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    // Permite llegar desde la lista de cuentas con la cuenta ya seleccionada.
+    [SupplyParameterFromQuery(Name = "accountId")]
+    public int? AccountIdFromQuery { get; set; }
+
+    private List<CustomerAccount> customerAccounts = new();
+    private List<AccountLocation> locations = new();
+    private AccountLocation locationForm = new();
+    private int selectedAccountId;
+    private int editLocationId = 0;
+    private string message = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        customerAccounts = await ApiService.GetAccountsAsync();
+
+        if (AccountIdFromQuery is int accountId && customerAccounts.Any(a => a.Id == accountId))
+        {
+            selectedAccountId = accountId;
+            await LoadLocations();
+        }
+    }
+
+    private async Task OnAccountChanged(ChangeEventArgs args)
+    {
+        selectedAccountId = int.TryParse(args.Value?.ToString(), out var id) ? id : 0;
+        CancelEdit();
+        await LoadLocations();
+    }
+
+    private async Task LoadLocations()
+    {
+        locations = selectedAccountId == 0
+            ? new List<AccountLocation>()
+            : await ApiService.GetLocationsAsync(selectedAccountId);
+    }
+
+    private async Task SaveLocation()
+    {
+        message = string.Empty;
+
+        if (string.IsNullOrWhiteSpace(locationForm.Name))
+        {
+            message = "El nombre es obligatorio.";
+            return;
+        }
+
+        bool success;
+        string? errorMessage;
+
+        if (editLocationId == 0)
+        {
+            (success, errorMessage) = await ApiService.AddLocationAsync(selectedAccountId, locationForm);
+            message = success ? "Registrado correctamente." : errorMessage ?? "Error al registrar.";
+        }
+        else
+        {
+            locationForm.Id = editLocationId;
+            (success, errorMessage) = await ApiService.UpdateLocationAsync(selectedAccountId, locationForm);
+            message = success ? "Actualizado correctamente." : errorMessage ?? "Error al actualizar.";
+        }
+
+        if (!success) return;
+
+        editLocationId = 0;
+        locationForm = new AccountLocation();
+        await LoadLocations();
+    }
+
+    private void EditLocation(AccountLocation location)
+    {
+        message = string.Empty;
+        editLocationId = location.Id;
+        locationForm = new AccountLocation
+        {
+            Id = location.Id,
+            CustomerAccountId = location.CustomerAccountId,
+            Name = location.Name,
+            Type = location.Type,
+            Address = location.Address,
+            Rif = location.Rif,
+            Phone = location.Phone
+        };
+    }
+
+    private void CancelEdit()
+    {
+        editLocationId = 0;
+        locationForm = new AccountLocation();
+        message = string.Empty;
+    }
+
+    private async Task DeleteLocation(int locationId)
+    {
+        await ApiService.DeleteLocationAsync(selectedAccountId, locationId);
+        if (editLocationId == locationId) CancelEdit();
+        await LoadLocations();
+    }
+
+    private static string TypeLabel(LocationType type) =>
+        type == LocationType.Warehouse ? "Depósito" : "Tienda";
+}

@@ -20,4 +20,10 @@ namespace Inventory.Core.Enums
         USD,
         Bs
     }
+
+    public enum LocationType
+    {
+        Warehouse,
+        Store
+    }
 }

@@ -19,6 +19,8 @@ namespace Inventory.API.Repositories
                 .Include(n => n.CustomerAccount)
                 .Include(n => n.CreatedByUser)
                 .Include(n => n.Currency)
+                .Include(n => n.Warehouse)
+                .Include(n => n.Store)
                 .Include(n => n.ReferenceNote)
                 .Include(n => n.Lines)
                     .ThenInclude(l => l.Item)
@@ -38,6 +40,8 @@ namespace Inventory.API.Repositories
                 .Include(n => n.CustomerAccount)
                 .Include(n => n.CreatedByUser)
                 .Include(n => n.Currency)
+                .Include(n => n.Warehouse)
+                .Include(n => n.Store)
                 .Include(n => n.ReferenceNote)
                 .Include(n => n.Lines)
                     .ThenInclude(l => l.Item)
@@ -56,6 +60,8 @@ namespace Inventory.API.Repositories
                 .Include(n => n.CustomerAccount)
                 .Include(n => n.CreatedByUser)
                 .Include(n => n.Currency)
+                .Include(n => n.Warehouse)
+                .Include(n => n.Store)
                 .Include(n => n.ReferenceNote)
                 .Include(n => n.Lines)
                     .ThenInclude(l => l.Item)
@@ -119,6 +125,8 @@ namespace Inventory.API.Repositories
             note.ConsumerCustomer = null;
             note.CreatedByUser = null;
             note.ReferenceNote = null;
+            note.Warehouse = null;
+            note.Store = null;
             note.ReferencedByNotes.Clear();
 
             foreach (var line in note.Lines)
@@ -168,6 +176,7 @@ namespace Inventory.API.Repositories
                 {
                     ItemId = item.Id,
                     SKU = item.SKU,
+                    LocationId = note.WarehouseId,            // depósito del que se compromete
                     Change = -(double)line.CommittedQuantity, // reduce la disponibilidad
                     PreviousStock = item.Stock,
                     NewStock = item.Stock,                    // el stock físico no cambia

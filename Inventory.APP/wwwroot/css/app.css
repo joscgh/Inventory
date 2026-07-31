@@ -175,3 +175,49 @@ a, .btn-link {
 code {
     color: #c02d76;
 }
+
+/* ===== Impresión de notas de entrega y pedido =====
+   window.print() imprime la página completa. Cuando la página marca una zona con
+   .note-print-area, sólo se imprime esa zona: así el comprobante sale con su
+   membrete (logo y datos del emisor) y sin el menú, los formularios ni los botones. */
+@media print {
+    body:has(.note-print-area) .sidebar,
+    body:has(.note-print-area) .top-row,
+    body:has(.note-print-area) .page-header,
+    body:has(.note-print-area) nav {
+        display: none !important;
+    }
+
+    /* Las columnas hermanas del comprobante desaparecen. Se seleccionan por
+       hermandad (no por "cualquier columna que no sea el área") para no ocultar
+       columnas que puedan existir dentro del propio comprobante. */
+    .note-print-area ~ [class*="col-"],
+    [class*="col-"]:has(~ .note-print-area) {
+        display: none !important;
+    }
+
+    /* ...y el comprobante ocupa la hoja completa, sin marco de tarjeta. */
+    .note-print-area {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 0 0 100% !important;
+    }
+
+    .note-print-area .card {
+        border: 0 !important;
+        box-shadow: none !important;
+    }
+
+    .note-print-area .card-body {
+        padding: 0 !important;
+    }
+
+    /* Bootstrap 5.0 no trae d-print-none; lo definimos por si acaso. */
+    .d-print-none {
+        display: none !important;
+    }
+
+    a[href]::after {
+        content: none !important;
+    }
+}

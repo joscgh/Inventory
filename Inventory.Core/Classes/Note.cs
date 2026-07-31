@@ -32,6 +32,14 @@ namespace Inventory.Core.Classes
         public int? CustomerAccountId { get; set; }
         public CustomerAccount? CustomerAccount { get; set; }
 
+        /// <summary>Depósito del que sale (o al que entra) la mercancía de esta nota.</summary>
+        public int? WarehouseId { get; set; }
+        public AccountLocation? Warehouse { get; set; }
+
+        /// <summary>Tienda que emite la nota.</summary>
+        public int? StoreId { get; set; }
+        public AccountLocation? Store { get; set; }
+
         public int? ConsumerCustomerId { get; set; }
         public ConsumerCustomer? ConsumerCustomer { get; set; }
 

@@ -53,8 +53,28 @@ namespace Inventory.API.Controllers
         public async Task<IActionResult> AdjustStock(string sku, [FromBody] StockAdjustmentRequest request)
         {
             if (request == null) return BadRequest("Adjustment request is required.");
-            var adjusted = await _service.AdjustStockAsync(sku, request.Delta, request.Reason, request.ReferenceType);
-            if (!adjusted) return NotFound($"Could not adjust stock. Item with SKU {sku} does not exist.");
+
+            var (adjusted, error) = await _service.AdjustStockAsync(
+                sku, request.Delta, request.Reason, request.ReferenceType, request.LocationId);
+
+            if (!adjusted) return BadRequest(error);
+            return NoContent();
+        }
+
+        [HttpGet("{sku}/stock")]
+        public async Task<ActionResult<IEnumerable<ItemStock>>> GetStockByLocation(string sku)
+        {
+            var stock = await _service.ListStockByLocationAsync(sku);
+            return Ok(stock);
+        }
+
+        [HttpPut("{sku}/stock/{locationId}")]
+        public async Task<IActionResult> SetStockAtLocation(string sku, int locationId, [FromBody] SetStockRequest request)
+        {
+            if (request == null) return BadRequest("Se requieren los datos de la existencia.");
+
+            var (saved, error) = await _service.SetStockAtLocationAsync(sku, locationId, request.Quantity, request.Reason);
+            if (!saved) return BadRequest(error);
             return NoContent();
         }
 
@@ -79,5 +99,14 @@ namespace Inventory.API.Controllers
         public double Delta { get; set; }
         public string Reason { get; set; } = string.Empty;
         public string ReferenceType { get; set; } = string.Empty;
+
+        /// <summary>Depósito o tienda del movimiento. Si se omite y el artículo sólo tiene existencias en una, se usa esa.</summary>
+        public int? LocationId { get; set; }
+    }
+
+    public class SetStockRequest
+    {
+        public double Quantity { get; set; }
+        public string Reason { get; set; } = string.Empty;
     }
 }

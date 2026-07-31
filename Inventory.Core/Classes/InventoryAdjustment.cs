@@ -16,6 +16,10 @@ namespace Inventory.Core.Classes
         public string? User { get; set; }
         public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 
+        /// <summary>Depósito o tienda donde ocurrió el movimiento. Null en los ajustes previos a esta función.</summary>
+        public int? LocationId { get; set; }
+        public AccountLocation? Location { get; set; }
+
         // Optional navigation
         public ItemUniversal? Item { get; set; }
     }

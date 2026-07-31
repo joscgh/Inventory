@@ -17,6 +17,7 @@ namespace Inventory.API.Repositories
         {
             return await _context.CustomerAccounts
                 .Include(a => a.Users)
+                .Include(a => a.Locations)
                 .ToListAsync();
         }
 
@@ -24,6 +25,7 @@ namespace Inventory.API.Repositories
         {
             return await _context.CustomerAccounts
                 .Include(a => a.Users)
+                .Include(a => a.Locations)
                 .FirstOrDefaultAsync(a => a.Id == id);
         }
 
@@ -43,14 +45,17 @@ namespace Inventory.API.Repositories
         public async Task UpdateAsync(CustomerAccount account)
         {
             var existing = await _context.CustomerAccounts
-                .Include(a => a.Users)
                 .FirstOrDefaultAsync(a => a.Id == account.Id);
 
             if (existing == null) return;
 
-            _context.Entry(existing).CurrentValues.SetValues(account);
-            existing.Users.Clear();
-            existing.Users.AddRange(account.Users);
+            // Sólo los datos propios de la cuenta. Los usuarios, depósitos y tiendas
+            // se administran por sus propios endpoints, así que no se tocan aquí.
+            existing.Name = account.Name;
+            existing.Document = account.Document;
+            existing.Address = account.Address;
+            existing.Email = account.Email;
+            existing.Phone = account.Phone;
             await _context.SaveChangesAsync();
         }
 

@@ -27,6 +27,7 @@ namespace Inventory.API.Repositories
                     .ThenInclude(i => i.Category)
                 .Include(a => a.Item)
                     .ThenInclude(i => i.Currency)
+                .Include(a => a.Location)
                 .OrderByDescending(a => a.Timestamp)
                 .ToListAsync();
         }
@@ -38,6 +39,7 @@ namespace Inventory.API.Repositories
                     .ThenInclude(i => i.Category)
                 .Include(a => a.Item)
                     .ThenInclude(i => i.Currency)
+                .Include(a => a.Location)
                 .OrderByDescending(a => a.Timestamp)
                 .ToListAsync();
         }

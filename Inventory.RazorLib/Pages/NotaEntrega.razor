@@ -1,5 +1,6 @@
 @page "/nota-entrega"
 @using Inventory.Core.Classes
+@using Inventory.Core.Enums
 @using Inventory.RazorLib.Services
 @using Inventory.RazorLib.Components
 @using Microsoft.JSInterop
@@ -42,6 +43,26 @@
                                 @foreach (var account in accounts)
                                 {
                                     <option value="@account.Id">@account.Name - @account.Document</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label">Almacén / depósito de salida</label>
+                            <select class="form-select" @bind="selectedWarehouseId">
+                                <option value="0">Seleccione un depósito</option>
+                                @foreach (var warehouse in warehouses)
+                                {
+                                    <option value="@warehouse.Id">@warehouse.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-sm-6">
+                            <label class="form-label">Tienda que emite</label>
+                            <select class="form-select" @bind="selectedStoreId">
+                                <option value="0">Seleccione una tienda</option>
+                                @foreach (var store in stores)
+                                {
+                                    <option value="@store.Id">@store.Name</option>
                                 }
                             </select>
                         </div>
@@ -130,16 +151,73 @@
             </div>
         </div>
 
-        <div class="col-lg-6">
+        <div class="col-lg-6 note-print-area">
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <h5 class="card-title">Vista previa de nota</h5>
+                    <h5 class="card-title d-print-none">Vista previa de nota</h5>
+
+                    <div class="d-flex align-items-start gap-3 border-bottom pb-3 mb-3">
+                        @if (issuerAccount?.HasLogo == true)
+                        {
+                            <img src="@AccountApi.GetLogoUrl(issuerAccount.Id)" alt="Logo de @issuerAccount.Name"
+                                 style="max-height: 70px; max-width: 160px; object-fit: contain;" />
+                        }
+                        <div class="flex-grow-1">
+                            <h5 class="mb-1">@(issuerAccount?.Name ?? "Nota de Entrega")</h5>
+                            @if (issuerAccount != null)
+                            {
+                                @if (!string.IsNullOrWhiteSpace(issuerAccount.Document))
+                                {
+                                    <div class="small text-muted">RIF: @issuerAccount.Document</div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(issuerAccount.Address))
+                                {
+                                    <div class="small text-muted">@issuerAccount.Address</div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(issuerAccount.Phone))
+                                {
+                                    <div class="small text-muted">Tlf: @issuerAccount.Phone</div>
+                                }
+                            }
+                        </div>
+                        <div class="text-end">
+                            <div class="fw-bold">NOTA DE ENTREGA</div>
+                            <div class="small">@noteNumber</div>
+                            <div class="small text-muted">@issueDate.ToString("dd/MM/yyyy")</div>
+                            @if (SelectedWarehouseName != null)
+                            {
+                                <div class="small text-muted">Depósito: @SelectedWarehouseName</div>
+                            }
+                            @if (SelectedStoreName != null)
+                            {
+                                <div class="small text-muted">Tienda: @SelectedStoreName</div>
+                            }
+                        </div>
+                    </div>
+
                     @if (!lineItems.Any())
                     {
                         <div class="alert alert-info">Agrega productos para ver el detalle de la nota de entrega.</div>
                     }
                     else
                     {
+                        <div class="mb-3">
+                            <div class="small text-muted text-uppercase">Cliente</div>
+                            <div class="fw-bold">@(string.IsNullOrWhiteSpace(customerName) ? "Sin especificar" : customerName)</div>
+                            @if (!string.IsNullOrWhiteSpace(customerDocument))
+                            {
+                                <div class="small">Documento: @customerDocument</div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(customerAddress))
+                            {
+                                <div class="small">@customerAddress</div>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(customerPhone))
+                            {
+                                <div class="small">Tlf: @customerPhone</div>
+                            }
+                        </div>
+
                         <div class="table-responsive">
                             <table class="table table-sm">
                                 <thead>
@@ -151,7 +229,7 @@
                                         <th class="text-end">Impuesto (Bs)</th>
                                         <th class="text-end">Subtotal (Bs)</th>
                                         <th class="text-end">Total (Bs)</th>
-                                        <th></th>
+                                        <th class="d-print-none"></th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -165,7 +243,7 @@
                                             <td class="text-end">@line.TaxAmountBs.ToString("N2")</td>
                                             <td class="text-end">@line.SubtotalBs.ToString("N2")</td>
                                             <td class="text-end">@line.TotalBs.ToString("N2")</td>
-                                            <td class="text-end">
+                                            <td class="text-end d-print-none">
                                                 <button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveLineItem(line)">Eliminar</button>
                                             </td>
                                         </tr>
@@ -193,13 +271,13 @@
                             </div>
                         </div>
 
-                        <div class="mt-4 d-flex flex-wrap gap-2 justify-content-end">
+                        <div class="mt-4 d-flex flex-wrap gap-2 justify-content-end d-print-none">
                             <button class="btn btn-secondary" @onclick="SaveNote">Guardar nota</button>
                             <button class="btn btn-success" @onclick="PrintNote">Imprimir nota</button>
                         </div>
                         @if (!string.IsNullOrEmpty(saveMessage))
                         {
-                            <div class="alert @saveMessageClass mt-3">@saveMessage</div>
+                            <div class="alert @saveMessageClass mt-3 d-print-none">@saveMessage</div>
                         }
                     }
                 </div>
@@ -212,6 +290,19 @@
     private List<ItemUniversal> items = new();
     private List<CustomerAccount> accounts = new();
     private List<LineItem> lineItems = new();
+    private List<AccountLocation> warehouses = new();
+    private List<AccountLocation> stores = new();
+    private int selectedWarehouseId;
+    private int selectedStoreId;
+
+    // Cuenta que emite la nota (la del usuario conectado): aporta el logo y el membrete.
+    private CustomerAccount? issuerAccount;
+
+    private string? SelectedWarehouseName =>
+        warehouses.FirstOrDefault(w => w.Id == selectedWarehouseId)?.Name;
+
+    private string? SelectedStoreName =>
+        stores.FirstOrDefault(s => s.Id == selectedStoreId)?.Name;
     private string noteNumber = string.Empty;
     private DateTime issueDate = DateTime.Today;
     private int selectedCustomerAccountId;
@@ -240,6 +331,26 @@
         noteNumber = GenerateNoteNumber("ENT");
         await LoadItems();
         await LoadCustomerAccounts();
+        await LoadLocations();
+    }
+
+    /// <summary>
+    /// Depósitos y tiendas de la cuenta del usuario conectado. Si hay uno solo de
+    /// cada tipo se preselecciona, que es el caso normal.
+    /// </summary>
+    private async Task LoadLocations()
+    {
+        var currentUser = await UserState.GetCurrentUserAsync();
+        if (currentUser == null) return;
+
+        issuerAccount = await AccountApi.GetAccountByIdAsync(currentUser.AccountId);
+
+        var locations = await AccountApi.GetLocationsAsync(currentUser.AccountId);
+        warehouses = locations.Where(l => l.Type == LocationType.Warehouse).ToList();
+        stores = locations.Where(l => l.Type == LocationType.Store).ToList();
+
+        if (warehouses.Count == 1) selectedWarehouseId = warehouses[0].Id;
+        if (stores.Count == 1) selectedStoreId = stores[0].Id;
     }
 
     private async Task OnItemSelected(ChangeEventArgs args)
@@ -415,6 +526,16 @@
             return;
         }
 
+        // El depósito es obligatorio: de ahí sale la mercancía que se compromete.
+        if (selectedWarehouseId == 0)
+        {
+            saveMessage = warehouses.Any()
+                ? "Debe seleccionar el almacén / depósito de salida."
+                : "No hay depósitos registrados. Registra uno en Depósitos y Tiendas antes de emitir la nota.";
+            saveMessageClass = "alert-warning";
+            return;
+        }
+
         ConsumerCustomer? savedConsumer = null;
         if (!string.IsNullOrWhiteSpace(customerName) || !string.IsNullOrWhiteSpace(customerDocument))
         {
@@ -460,6 +581,8 @@
             CustomerAccountId = selectedCustomerAccountId > 0 ? selectedCustomerAccountId : currentUser.AccountId,
             ConsumerCustomerId = savedConsumer?.Id,
             CreatedByUserId = currentUser.UserId,
+            WarehouseId = selectedWarehouseId,
+            StoreId = selectedStoreId > 0 ? selectedStoreId : null,
             Lines = lineItems.Select(l => new NoteLine
             {
                 ItemUniversalId = l.ItemId,

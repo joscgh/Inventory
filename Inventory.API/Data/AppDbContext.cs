@@ -23,6 +23,9 @@ namespace Inventory.API.Data
         public DbSet<Inventory.Core.Classes.CustomerAccount> CustomerAccounts { get; set; }
         public DbSet<Inventory.Core.Classes.CustomerAccountUser> CustomerAccountUsers { get; set; }
         public DbSet<Inventory.Core.Classes.ConsumerCustomer> ConsumerCustomers { get; set; }
+        public DbSet<Inventory.Core.Classes.AccountLocation> AccountLocations { get; set; }
+        public DbSet<Inventory.Core.Classes.AccountLogo> AccountLogos { get; set; }
+        public DbSet<Inventory.Core.Classes.ItemStock> ItemStocks { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -90,6 +93,29 @@ namespace Inventory.API.Data
                 .HasForeignKey(a => a.ItemId)
                 .OnDelete(DeleteBehavior.Cascade);
 
+            // El historial conserva el depósito aunque éste se borre después.
+            modelBuilder.Entity<Inventory.Core.Classes.InventoryAdjustment>()
+                .HasOne(a => a.Location)
+                .WithMany()
+                .HasForeignKey(a => a.LocationId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            // Existencias por depósito / tienda.
+            modelBuilder.Entity<Inventory.Core.Classes.ItemStock>()
+                .HasKey(s => new { s.ItemId, s.LocationId });
+
+            modelBuilder.Entity<Inventory.Core.Classes.ItemStock>()
+                .HasOne(s => s.Item)
+                .WithMany(i => i.StockByLocation)
+                .HasForeignKey(s => s.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Inventory.Core.Classes.ItemStock>()
+                .HasOne(s => s.Location)
+                .WithMany()
+                .HasForeignKey(s => s.LocationId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             modelBuilder.Entity<Inventory.Core.Classes.PriceVariant>()
                 .HasKey(p => p.Id);
 
@@ -112,6 +138,20 @@ namespace Inventory.API.Data
                 .HasOne(n => n.ConsumerCustomer)
                 .WithMany(c => c.Notes)
                 .HasForeignKey(n => n.ConsumerCustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Restrict: una nota emitida deja constancia de su depósito y tienda,
+            // así que no se permite borrar una ubicación que ya tiene notas.
+            modelBuilder.Entity<Inventory.Core.Classes.Note>()
+                .HasOne(n => n.Warehouse)
+                .WithMany()
+                .HasForeignKey(n => n.WarehouseId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Inventory.Core.Classes.Note>()
+                .HasOne(n => n.Store)
+                .WithMany()
+                .HasForeignKey(n => n.StoreId)
                 .OnDelete(DeleteBehavior.Restrict);
 
             modelBuilder.Entity<Inventory.Core.Classes.Note>()
@@ -166,6 +206,33 @@ namespace Inventory.API.Data
                 .HasMany(a => a.Users)
                 .WithOne(u => u.Account)
                 .HasForeignKey(u => u.CustomerAccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Inventory.Core.Classes.CustomerAccount>()
+                .HasMany(a => a.Locations)
+                .WithOne(l => l.Account)
+                .HasForeignKey(l => l.CustomerAccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Inventory.Core.Classes.AccountLocation>()
+                .HasKey(l => l.Id);
+
+            // Dentro de una misma cuenta no se repite el nombre de un depósito o tienda.
+            modelBuilder.Entity<Inventory.Core.Classes.AccountLocation>()
+                .HasIndex(l => new { l.CustomerAccountId, l.Name })
+                .IsUnique();
+
+            // HasLogo se calcula al listar, no es una columna.
+            modelBuilder.Entity<Inventory.Core.Classes.CustomerAccount>()
+                .Ignore(a => a.HasLogo);
+
+            modelBuilder.Entity<Inventory.Core.Classes.AccountLogo>()
+                .HasKey(l => l.CustomerAccountId);
+
+            modelBuilder.Entity<Inventory.Core.Classes.AccountLogo>()
+                .HasOne(l => l.Account)
+                .WithOne()
+                .HasForeignKey<Inventory.Core.Classes.AccountLogo>(l => l.CustomerAccountId)
                 .OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<Inventory.Core.Classes.CustomerAccountUser>()

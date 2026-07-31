@@ -6,6 +6,8 @@
 @inject CurrencyApiService CurrencyService
 @inject CategoryApiService CategoryService
 @inject TaxApiService TaxService
+@inject CustomerAccountApiService AccountApi
+@inject UserStateService UserState
     
 <div class="card p-4 shadow-sm mb-4">
     <h3 class="card-title text-primary">@(isEditing ? "✏️ Editar producto" : "📦 Register New Item")</h3>
@@ -105,8 +107,40 @@
                 </select>
             </div>
             <div class="col-md-4">
-                <label class="form-label">Price</label>
-                <input type="number" step="0.01" class="form-control" @bind="newItem.Price" required />
+                <label class="form-label">Costo</label>
+                <div class="input-group">
+                    <span class="input-group-text">@CurrencySymbol</span>
+                    <input type="number" step="0.01" min="0" class="form-control"
+                           @bind="newItem.Cost" @bind:after="RecalculatePrice" placeholder="0.00" />
+                </div>
+                <div class="form-text">Costo de adquisición del producto.</div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Margen de ganancia</label>
+                <div class="input-group">
+                    <input type="number" step="0.01" min="0" class="form-control"
+                           @bind="newItem.ProfitMargin" @bind:after="RecalculatePrice" placeholder="0" />
+                    <span class="input-group-text">%</span>
+                </div>
+                <div class="form-text">El precio de venta se calcula con este margen.</div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Precio de venta</label>
+                <div class="input-group">
+                    <span class="input-group-text">@CurrencySymbol</span>
+                    <input type="number" step="0.01" class="form-control fw-bold"
+                           @bind="newItem.Price" readonly="@(newItem.Cost > 0)" required />
+                </div>
+                @if (newItem.Cost > 0)
+                {
+                    <div class="form-text text-success">
+                        Ganancia: <strong>@CurrencySymbol@newItem.ProfitAmount.ToString("N2")</strong> por unidad (calculado)
+                    </div>
+                }
+                else
+                {
+                    <div class="form-text">Sin costo: ingresa el precio manualmente.</div>
+                }
             </div>
             <div class="col-12">
                 <h6 class="mt-3">📌 Precios adicionales</h6>
@@ -170,11 +204,39 @@
                     <div class="form-text mt-2">Los impuestos se aplican desde la lista de impuestos; no es necesario ingresar una tasa manual.</div>
                 }
             </div>
-            <div class="col-md-4">
-                <label class="form-label">Initial Stock</label>
-                <input type="number" step="0.1" class="form-control" @bind="newItem.Stock" required />
-            </div>
         </div>
+
+        <h5 class="mt-4 text-secondary">🏬 Existencias por depósito / tienda</h5>
+        @if (!locations.Any())
+        {
+            <div class="alert alert-warning py-2">
+                No hay depósitos ni tiendas registrados.
+                <a href="/account-locations">Regístralos aquí</a> para poder cargar existencias.
+            </div>
+        }
+        else
+        {
+            <div class="row g-2 mb-2">
+                @foreach (var location in locations)
+                {
+                    <div class="col-md-4">
+                        <label class="form-label">
+                            @location.Name
+                            <small class="text-muted">(@(location.Type == LocationType.Warehouse ? "Depósito" : "Tienda"))</small>
+                        </label>
+                        <input type="number" step="0.1" min="0" class="form-control"
+                               value="@GetStockInput(location.Id)"
+                               @onchange="e => SetStockInput(location.Id, e.Value?.ToString())" />
+                    </div>
+                }
+            </div>
+            <div class="form-text mb-3">
+                Total: <strong>@StockInputTotal</strong> @newItem.Unit.
+                @(isEditing
+                    ? "Al guardar se ajustan las existencias de las ubicaciones que hayas cambiado."
+                    : "Estas son las existencias iniciales del artículo.")
+            </div>
+        }
 
         <h5 class="mt-4 text-secondary">⚙️ Custom Attributes (Specifications)</h5>
         <div class="row g-2 align-items-center mb-3">
@@ -232,18 +294,47 @@ private ItemUniversal newItem = new();
     private string feedbackMessage = string.Empty;
     private string feedbackClass = string.Empty;
 
+    private List<AccountLocation> locations = new();
+
+    // Cantidad escrita por ubicación, y la que traía al abrir el formulario,
+    // para saber qué ubicaciones cambiaron de verdad al editar.
+    private Dictionary<int, double> stockInputs = new();
+    private Dictionary<int, double> originalStock = new();
+
     protected override async Task OnInitializedAsync()
     {
         await LoadCurrencies();
         await LoadCategories();
         await LoadTaxes();
         await LoadExistingItems();
+        await LoadLocations();
 
         if (ItemToEdit != null)
         {
             LoadItemForEditing(ItemToEdit);
         }
     }
+
+    /// <summary>Depósitos y tiendas de la cuenta del usuario conectado.</summary>
+    private async Task LoadLocations()
+    {
+        var currentUser = await UserState.GetCurrentUserAsync();
+        if (currentUser == null) return;
+
+        locations = await AccountApi.GetLocationsAsync(currentUser.AccountId);
+    }
+
+    private double GetStockInput(int locationId) =>
+        stockInputs.TryGetValue(locationId, out var value) ? value : 0;
+
+    private void SetStockInput(int locationId, string? raw)
+    {
+        var parsed = double.TryParse(raw, out var value) ? value : 0;
+        stockInputs[locationId] = parsed < 0 ? 0 : parsed;
+    }
+
+    private double StockInputTotal =>
+        Math.Round(locations.Sum(l => GetStockInput(l.Id)), 2);
 
     private void LoadItemForEditing(ItemUniversal source)
     {
@@ -257,6 +348,8 @@ private ItemUniversal newItem = new();
             SKU = source.SKU,
             Barcode = source.Barcode,
             Name = source.Name,
+            Cost = source.Cost,
+            ProfitMargin = source.ProfitMargin,
             Price = source.Price,
             TaxRate = source.TaxRate,
             CurrencyId = source.CurrencyId,
@@ -274,6 +367,10 @@ private ItemUniversal newItem = new();
         };
 
         selectedTaxIds = source.Taxes?.Select(t => t.Id).ToList() ?? new List<int>();
+
+        // Existencias actuales por ubicación, para poder detectar los cambios al guardar.
+        stockInputs = locations.ToDictionary(l => l.Id, l => source.StockAt(l.Id));
+        originalStock = new Dictionary<int, double>(stockInputs);
     }
 
     private async Task LoadCurrencies()
@@ -308,6 +405,19 @@ private ItemUniversal newItem = new();
     private async Task LoadExistingItems()
     {
         existingItems = await ApiService.GetItemsAsync();
+    }
+
+    private string CurrencySymbol =>
+        currencies.FirstOrDefault(c => c.Id == newItem.CurrencyId)?.Symbol ?? string.Empty;
+
+    // Precio de venta = Costo x (1 + Margen/100). Solo se autocalcula cuando hay un
+    // costo definido; si el costo es 0 el usuario ingresa el precio manualmente.
+    private void RecalculatePrice()
+    {
+        if (newItem.Cost > 0)
+        {
+            newItem.Price = Math.Round(newItem.Cost * (1 + newItem.ProfitMargin / 100m), 2);
+        }
     }
 
     private string PreviewSku => GenerateFormattedSku(GetNextSkuNumber());
@@ -411,12 +521,17 @@ private ItemUniversal newItem = new();
             newItem.SKU = PreviewSku;
         }
 
+        // Aseguramos que el precio quede alineado con costo + margen antes de enviar.
+        RecalculatePrice();
+
         // Al editar permitimos stock 0 (un producto existente puede quedar sin existencias).
         var stockInvalid = isEditing ? newItem.Stock < 0 : newItem.Stock <= 0;
 
         if (string.IsNullOrWhiteSpace(newItem.SKU)
             || string.IsNullOrWhiteSpace(newItem.Name)
             || newItem.Price <= 0
+            || newItem.Cost < 0
+            || newItem.ProfitMargin < 0
             || stockInvalid
             || newItem.CurrencyId == 0
             || newItem.CategoryId == 0)
@@ -428,25 +543,64 @@ private ItemUniversal newItem = new();
 
         newItem.Taxes = taxes.Where(t => selectedTaxIds.Contains(t.Id)).ToList();
 
+        // Al crear, las existencias iniciales viajan con el artículo. Al editar se
+        // aplican después, porque el PUT del artículo no toca las existencias.
+        newItem.StockByLocation = isEditing
+            ? new List<ItemStock>()
+            : locations
+                .Where(l => GetStockInput(l.Id) > 0)
+                .Select(l => new ItemStock { LocationId = l.Id, Quantity = GetStockInput(l.Id) })
+                .ToList();
+
+        newItem.Stock = isEditing ? newItem.Stock : StockInputTotal;
+
         var success = isEditing
             ? await ApiService.UpdateItemAsync(newItem)
             : await ApiService.SaveItemAsync(newItem);
 
-        if (success)
-        {
-            feedbackMessage = isEditing ? "Cambios guardados correctamente." : "Artículo guardado correctamente.";
-            feedbackClass = "alert alert-success";
-            if (!isEditing)
-            {
-                newItem = new();
-                selectedTaxIds.Clear();
-            }
-            await OnItemSaved.InvokeAsync();
-        }
-        else
+        if (!success)
         {
             feedbackMessage = "No se pudo guardar el artículo. Verifica que el SKU no esté duplicado y que la API esté disponible.";
             feedbackClass = "alert alert-danger";
+            return;
         }
+
+        var stockError = isEditing ? await ApplyStockChangesAsync() : null;
+
+        feedbackMessage = stockError == null
+            ? (isEditing ? "Cambios guardados correctamente." : "Artículo guardado correctamente.")
+            : $"El artículo se guardó, pero las existencias no: {stockError}";
+        feedbackClass = stockError == null ? "alert alert-success" : "alert alert-warning";
+
+        if (!isEditing)
+        {
+            newItem = new();
+            selectedTaxIds.Clear();
+            stockInputs.Clear();
+        }
+
+        await OnItemSaved.InvokeAsync();
+    }
+
+    /// <summary>
+    /// Fija las existencias de las ubicaciones cuya cantidad cambió en el formulario.
+    /// Devuelve el primer error encontrado, o null si todo se aplicó.
+    /// </summary>
+    private async Task<string?> ApplyStockChangesAsync()
+    {
+        foreach (var location in locations)
+        {
+            var updated = GetStockInput(location.Id);
+            var previous = originalStock.TryGetValue(location.Id, out var value) ? value : 0;
+            if (Math.Abs(updated - previous) < 0.0001) continue;
+
+            var (ok, error) = await ApiService.SetStockAtLocationAsync(
+                newItem.SKU, location.Id, updated, "Ajuste desde la ficha del artículo");
+
+            if (!ok) return error;
+            originalStock[location.Id] = updated;
+        }
+
+        return null;
     }
 }

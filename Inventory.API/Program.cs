@@ -14,6 +14,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddScoped<IItemRepository, ItemRepository>();
 builder.Services.AddScoped<IItemService, ItemService>();
 builder.Services.AddScoped<IAdjustmentRepository, AdjustmentRepository>();
+builder.Services.AddScoped<IItemStockRepository, ItemStockRepository>();
 
 builder.Services.AddScoped<ICategoryRepository, CategoryRepository>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
@@ -31,6 +32,10 @@ builder.Services.AddScoped<ICustomerAccountRepository, CustomerAccountRepository
 builder.Services.AddScoped<ICustomerAccountService, CustomerAccountService>();
 builder.Services.AddScoped<ICustomerAccountUserRepository, CustomerAccountUserRepository>();
 builder.Services.AddScoped<ICustomerAccountUserService, CustomerAccountUserService>();
+builder.Services.AddScoped<IAccountLocationRepository, AccountLocationRepository>();
+builder.Services.AddScoped<IAccountLocationService, AccountLocationService>();
+builder.Services.AddScoped<IAccountLogoRepository, AccountLogoRepository>();
+builder.Services.AddScoped<IAccountLogoService, AccountLogoService>();
 
 builder.Services.AddHttpClient<IExchangeRateScraper, BcvExchangeRateScraper>(client =>
 {

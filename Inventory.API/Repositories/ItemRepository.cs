@@ -21,6 +21,8 @@ namespace Inventory.API.Repositories
                 .Include(i => i.Category)
                 .Include(i => i.Taxes)
                 .Include(i => i.PriceVariants)
+                .Include(i => i.StockByLocation)
+                    .ThenInclude(s => s.Location)
                 .ToListAsync();
 
             // Comprometido = entregado (reserva) menos acreditado (la nota de crédito
@@ -57,6 +59,8 @@ namespace Inventory.API.Repositories
                 .Include(i => i.Category)
                 .Include(i => i.Taxes)
                 .Include(i => i.PriceVariants)
+                .Include(i => i.StockByLocation)
+                    .ThenInclude(s => s.Location)
                 .FirstOrDefaultAsync(i => i.SKU == SKU);
         }
 

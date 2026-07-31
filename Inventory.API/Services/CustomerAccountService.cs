@@ -6,17 +6,38 @@ namespace Inventory.API.Services
     public class CustomerAccountService : ICustomerAccountService
     {
         private readonly ICustomerAccountRepository _repository;
+        private readonly IAccountLogoRepository _logoRepository;
 
-        public CustomerAccountService(ICustomerAccountRepository repository)
+        public CustomerAccountService(
+            ICustomerAccountRepository repository,
+            IAccountLogoRepository logoRepository)
         {
             _repository = repository;
+            _logoRepository = logoRepository;
         }
 
-        public async Task<IEnumerable<CustomerAccount>> ListAccountsAsync() =>
-            await _repository.GetAllAsync();
+        public async Task<IEnumerable<CustomerAccount>> ListAccountsAsync()
+        {
+            var accounts = (await _repository.GetAllAsync()).ToList();
 
-        public async Task<CustomerAccount?> FindByIdAsync(int id) =>
-            await _repository.GetByIdAsync(id);
+            // Una sola consulta de ids para marcar quién tiene logo, sin traer las imágenes.
+            var withLogo = await _logoRepository.GetAccountIdsWithLogoAsync();
+            foreach (var account in accounts)
+            {
+                account.HasLogo = withLogo.Contains(account.Id);
+            }
+
+            return accounts;
+        }
+
+        public async Task<CustomerAccount?> FindByIdAsync(int id)
+        {
+            var account = await _repository.GetByIdAsync(id);
+            if (account == null) return null;
+
+            account.HasLogo = await _logoRepository.GetByAccountAsync(id) != null;
+            return account;
+        }
 
         public async Task<bool> RegisterAccountAsync(CustomerAccount account)
         {

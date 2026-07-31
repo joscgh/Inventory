@@ -70,6 +70,7 @@
                                 <th>Tipo</th>
                                 <th>Fecha</th>
                                 <th>Cliente</th>
+                                <th>Depósito / Tienda</th>
                                 <th class="text-end">Cantidad</th>
                                 <th>Moneda</th>
                                 <th class="text-end">Total (Bs)</th>
@@ -84,6 +85,10 @@
                                     <td><span class="badge @GetBadgeClass(note.Type)">@GetTypeLabel(note.Type)</span></td>
                                     <td>@note.IssueDate.ToString("dd/MM/yyyy")</td>
                                     <td>@(string.IsNullOrWhiteSpace(note.CustomerName) ? "Sin cliente" : note.CustomerName)</td>
+                                    <td>
+                                        <small class="d-block">@(note.Warehouse?.Name ?? "—")</small>
+                                        <small class="d-block text-muted">@(note.Store?.Name ?? "—")</small>
+                                    </td>
                                     <td class="text-end">@TotalQuantity(note).ToString("N2")</td>
                                     <td>@GetCurrencyLabel(note)</td>
                                     <td class="text-end">
