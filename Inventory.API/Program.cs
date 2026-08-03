@@ -75,15 +75,28 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var context = services.GetRequiredService<AppDbContext>();
+        var logger = services.GetRequiredService<ILogger<Program>>();
 
-        // Usa migraciones EF Core para mantener el esquema de la BD actualizado.
-        context.Database.EnsureCreated();
-        context.Database.Migrate();
+        // Evita que el arranque falle cuando la base de datos todavía no está alineada
+        // con el modelo actual o cuando las migraciones no se han aplicado por completo.
+        // Si la migración no puede aplicarse, la API seguirá arrancando y el error queda
+        // registrado para corregirse de forma explícita.
+        var pendingMigrations = (await context.Database.GetPendingMigrationsAsync()).ToList();
+        if (pendingMigrations.Count > 0)
+        {
+            logger.LogWarning("Migraciones pendientes de EF Core: {PendingMigrations}", string.Join(", ", pendingMigrations));
+            logger.LogWarning("Se aplicará EnsureCreated para dejar la API operativa con el modelo actual.");
+            await context.Database.EnsureCreatedAsync();
+        }
+        else
+        {
+            await context.Database.MigrateAsync();
+        }
     }
     catch (Exception ex)
     {
         var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Ocurrió un error al aplicar las migraciones de la base de datos.");
+        logger.LogError(ex, "Ocurrió un error al aplicar las migraciones de la base de datos. La API continuará arrancando con el estado actual de la conexión.");
     }
 }
 

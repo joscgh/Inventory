@@ -11,10 +11,20 @@ builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnCh
 builder.Configuration.AddJsonFile($"appsettings.{builder.HostEnvironment.Environment}.json", optional: true, reloadOnChange: false);
 
 var apiBaseUrl = builder.Configuration["ApiSettings:BaseUrl"];
+var apiHostOverride = builder.Configuration["ApiSettings:Host"];
+var apiPort = builder.Configuration.GetValue<int?>("ApiSettings:Port") ?? 5130;
+var useCurrentHost = builder.Configuration.GetValue<bool?>("ApiSettings:UseCurrentHost") ?? true;
+
 if (string.IsNullOrWhiteSpace(apiBaseUrl))
 {
     var appOrigin = new Uri(builder.HostEnvironment.BaseAddress);
-    apiBaseUrl = $"{appOrigin.Scheme}://{appOrigin.Host}:5130";
+    var resolvedHost = useCurrentHost
+        ? appOrigin.Host
+        : string.IsNullOrWhiteSpace(apiHostOverride)
+            ? appOrigin.Host
+            : apiHostOverride;
+
+    apiBaseUrl = $"{appOrigin.Scheme}://{resolvedHost}:{apiPort}";
 }
 
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBaseUrl.TrimEnd('/') + "/") });
