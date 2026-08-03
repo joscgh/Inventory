@@ -7,12 +7,17 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// Derivamos el host del API del mismo origen desde el que se sirvió la app.
-// Así funciona igual en PC (localhost) que desde el teléfono en la red local (ej. 192.168.0.100),
-// sin necesidad de codificar la IP a mano.
-var appOrigin = new Uri(builder.HostEnvironment.BaseAddress);
-var apiBaseAddress = new Uri($"{appOrigin.Scheme}://{appOrigin.Host}:5130/");
-builder.Services.AddScoped(sp => new HttpClient { BaseAddress = apiBaseAddress });
+builder.Configuration.AddJsonFile("appsettings.json", optional: true, reloadOnChange: false);
+builder.Configuration.AddJsonFile($"appsettings.{builder.HostEnvironment.Environment}.json", optional: true, reloadOnChange: false);
+
+var apiBaseUrl = builder.Configuration["ApiSettings:BaseUrl"];
+if (string.IsNullOrWhiteSpace(apiBaseUrl))
+{
+    var appOrigin = new Uri(builder.HostEnvironment.BaseAddress);
+    apiBaseUrl = $"{appOrigin.Scheme}://{appOrigin.Host}:5130";
+}
+
+builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(apiBaseUrl.TrimEnd('/') + "/") });
 builder.Services.AddScoped<ItemApiService>();
 builder.Services.AddScoped<CurrencyApiService>();
 builder.Services.AddScoped<CategoryApiService>();

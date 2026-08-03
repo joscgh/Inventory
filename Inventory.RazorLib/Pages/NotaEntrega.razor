@@ -1,6 +1,7 @@
 @page "/nota-entrega"
 @using Inventory.Core.Classes
 @using Inventory.Core.Enums
+@using Inventory.Core.Services
 @using Inventory.RazorLib.Services
 @using Inventory.RazorLib.Components
 @using Microsoft.JSInterop
@@ -273,7 +274,8 @@
 
                         <div class="mt-4 d-flex flex-wrap gap-2 justify-content-end d-print-none">
                             <button class="btn btn-secondary" @onclick="SaveNote">Guardar nota</button>
-                            <button class="btn btn-success" @onclick="PrintNote">Imprimir nota</button>
+                            <button class="btn btn-success" @onclick="PrintNote">Generar PDF</button>
+                            <button class="btn btn-outline-success" @onclick="ShareByWhatsapp" disabled="@(!lineItems.Any())">📲 Compartir por WhatsApp</button>
                         </div>
                         @if (!string.IsNullOrEmpty(saveMessage))
                         {
@@ -481,6 +483,31 @@
     private async Task PrintNote()
     {
         await JSRuntime.InvokeVoidAsync("window.print");
+    }
+
+    private async Task ShareByWhatsapp()
+    {
+        if (!lineItems.Any()) return;
+
+        var text = DocumentShareTextBuilder.BuildNoteShareText(
+            title: "NOTA DE ENTREGA",
+            number: noteNumber,
+            issueDate: issueDate,
+            customerName: customerName,
+            customerDocument: customerDocument,
+            customerAddress: customerAddress,
+            notes: notes,
+            warehouseName: SelectedWarehouseName,
+            storeName: SelectedStoreName,
+            lines: lineItems.Select(l => (l.Description, l.Quantity, l.UnitPrice, l.TaxRate, l.SubtotalBs, l.TotalBs)),
+            subtotal: SubtotalBs,
+            totalTax: TotalTaxBs,
+            grandTotal: GrandTotalBs,
+            validityPeriod: null);
+
+        var encoded = Uri.EscapeDataString(text);
+        var url = $"https://wa.me/?text={encoded}";
+        await JSRuntime.InvokeVoidAsync("open", url, "_blank");
     }
 
     private static string GenerateNoteNumber(string prefix)

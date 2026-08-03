@@ -6,6 +6,9 @@ using System.Text.Json.Serialization;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var apiUrl = builder.Configuration["Api:Url"] ?? builder.Configuration["Urls"] ?? "http://0.0.0.0:5130";
+builder.WebHost.UseUrls(apiUrl);
+
 // Add services to the container.
 
 builder.Services.AddDbContext<AppDbContext>(options =>

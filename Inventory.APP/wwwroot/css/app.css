@@ -5,6 +5,8 @@ html, body {
 body {
     min-height: 100vh;
     overflow-x: hidden;
+    -webkit-tap-highlight-color: transparent;
+    background: #f8f9fa;
 }
 
 .page-shell {
@@ -57,6 +59,15 @@ body {
 }
 
 @media (max-width: 767.98px) {
+    body {
+        font-size: 15px;
+    }
+
+    .container-fluid {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+    }
+
     .page-header {
         align-items: stretch;
     }
@@ -73,6 +84,31 @@ body {
     .page-actions .form-select,
     .page-actions .form-control {
         width: 100%;
+    }
+
+    .card {
+        border-radius: 0.75rem;
+    }
+
+    .table-responsive table {
+        min-width: 640px;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .container-fluid {
+        padding-left: 0.6rem;
+        padding-right: 0.6rem;
+    }
+
+    .btn,
+    .form-control,
+    .form-select {
+        min-height: 44px;
+    }
+
+    .page-header h2 {
+        font-size: 1.2rem;
     }
 }
 
@@ -181,6 +217,11 @@ code {
    .note-print-area, sólo se imprime esa zona: así el comprobante sale con su
    membrete (logo y datos del emisor) y sin el menú, los formularios ni los botones. */
 @media print {
+    @page {
+        size: A4;
+        margin: 8mm;
+    }
+
     body:has(.note-print-area) .sidebar,
     body:has(.note-print-area) .top-row,
     body:has(.note-print-area) .page-header,
@@ -198,18 +239,41 @@ code {
 
     /* ...y el comprobante ocupa la hoja completa, sin marco de tarjeta. */
     .note-print-area {
+        position: relative;
         width: 100% !important;
         max-width: 100% !important;
         flex: 0 0 100% !important;
     }
 
+    .note-print-area::before {
+        content: "Documento fiscal no válido";
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 32pt;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(0, 0, 0, 0.12);
+        transform: rotate(-30deg);
+        z-index: 0;
+        pointer-events: none;
+        white-space: nowrap;
+    }
+
     .note-print-area .card {
         border: 0 !important;
         box-shadow: none !important;
+        position: relative;
+        z-index: 1;
     }
 
     .note-print-area .card-body {
         padding: 0 !important;
+        position: relative;
+        z-index: 1;
     }
 
     /* Bootstrap 5.0 no trae d-print-none; lo definimos por si acaso. */
