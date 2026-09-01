@@ -1,7 +1,7 @@
 ﻿@using Inventory.Core.Classes
 @using Inventory.Core.Enums
 @using Inventory.RazorLib.Components
-@using Inventory.RazorLib.Services
+@using Inventory.SharedUI.Services
 @inject ItemApiService ApiService
 @inject CurrencyApiService CurrencyService
 @inject CategoryApiService CategoryService
@@ -9,267 +9,333 @@
 @inject CustomerAccountApiService AccountApi
 @inject UserStateService UserState
     
-<div class="card p-4 shadow-sm mb-4">
-    <h3 class="card-title text-primary">@(isEditing ? "✏️ Editar producto" : "📦 Register New Item")</h3>
-    <hr />
+<div class="card border-0 shadow-sm rounded-4 overflow-hidden mb-4">
+    <div class="px-4 py-4" style="background: linear-gradient(135deg, #f8fbff 0%, #eef6ff 100%);">
+        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
+            <div>
+                <h3 class="mb-1 text-primary fw-semibold">@(isEditing ? "✏️ Editar producto" : "➕ Agregar producto")</h3>
+                <p class="text-muted mb-0">Organiza la información del producto en secciones claras y mantén el inventario más ordenado.</p>
+            </div>
+            <span class="badge rounded-pill bg-white border text-primary px-3 py-2 shadow-sm">
+                @(isEditing ? "Modo edición" : "Nuevo registro")
+            </span>
+        </div>
+    </div>
 
-    <EditForm Model="@newItem" OnValidSubmit="HandleSubmit">
-        <DataAnnotationsValidator />
-        <ValidationSummary />
+    <div class="card-body p-4">
+        <EditForm Model="@newItem" OnSubmit="HandleSubmit">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
 
-        @if (!string.IsNullOrEmpty(feedbackMessage))
-        {
-            <div class="alert @feedbackClass mt-3" role="alert">
-                @feedbackMessage
-            </div>
-        }
-
-        <div class="row g-3">
-            <div class="col-md-4">
-                <label class="form-label">Name</label>
-                <input class="form-control" @bind="newItem.Name" placeholder="Product name" required />
-            </div>
-            <div class="col-md-4">
-                <label class="form-label">SKU</label>
-                <div class="input-group">
-                    <input class="form-control" @bind="newItem.SKU" placeholder="e.g., SKU000001" disabled="@autoGenerateSku" required />
-                    <button class="btn btn-outline-secondary" type="button" @onclick="GenerateSku">Generate</button>
-                </div>
-                <div class="form-text mt-1">
-                    <input class="form-check-input me-1" type="checkbox" id="autoSku" @bind="autoGenerateSku" />
-                    <label class="form-check-label" for="autoSku">Auto-generate SKU</label>
-                </div>
-                @if (autoGenerateSku)
-                {
-                    <div class="form-text">Preview: <strong>@PreviewSku</strong></div>
-                }
-            </div>
-            <div class="col-md-4">
-                <label class="form-label">Código de barras</label>
-                <input class="form-control" @bind="newItem.Barcode" placeholder="Escanea o escribe el código" />
-                <div class="form-text">Se guarda con el producto para escanearlo en notas.</div>
-            </div>
-            <div class="col-md-12">
-                <BarcodeScanner OnScanned="HandleBarcodeScanned" />
-            </div>
-            @if (!autoGenerateSku)
+            @if (!string.IsNullOrEmpty(feedbackMessage))
             {
-                <div class="col-md-2">
-                    <label class="form-label">Prefix</label>
-                    <input class="form-control" @bind="skuPrefix" placeholder="SKU" />
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label">Digits</label>
-                    <input type="number" class="form-control" @bind="skuDigits" min="1" max="12" />
+                <div class="alert @feedbackClass mt-3" role="alert">
+                    @feedbackMessage
                 </div>
             }
-            <div class="col-md-3">
-                <label class="form-label">Category</label>
-                <select class="form-select" @bind="newItem.CategoryId">
-                    @if (!categories.Any())
-                    {
-                        <option value="0">Loading categories...</option>
-                    }
-                    else
-                    {
-                        <option value="0">-- Select Category --</option>
-                        @foreach (var category in categories)
-                        {
-                            <option value="@category.Id">@category.Name</option>
-                        }
-                    }
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Currency</label>
-                <select class="form-select" @bind="newItem.CurrencyId">
-                    @if (!currencies.Any())
-                    {
-                        <option disabled>Loading currencies...</option>
-                    }
-                    else
-                    {
-                        <option value="0">-- Select Currency --</option>
-                        @foreach (var currency in currencies)
-                        {
-                            <option value="@currency.Id">@currency.Code - @currency.Name</option>
-                        }
-                    }
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">Unit Type</label>
-                <select class="form-select" @bind="newItem.Unit">
-                    @foreach (var unit in Enum.GetValues<UnitType>())
-                    {
-                        <option value="@unit">@unit</option>
-                    }
-                </select>
-            </div>
-            <div class="col-md-4">
-                <label class="form-label">Costo</label>
-                <div class="input-group">
-                    <span class="input-group-text">@CurrencySymbol</span>
-                    <input type="number" step="0.01" min="0" class="form-control"
-                           @bind="newItem.Cost" @bind:after="RecalculatePrice" placeholder="0.00" />
-                </div>
-                <div class="form-text">Costo de adquisición del producto.</div>
-            </div>
-            <div class="col-md-4">
-                <label class="form-label">Margen de ganancia</label>
-                <div class="input-group">
-                    <input type="number" step="0.01" min="0" class="form-control"
-                           @bind="newItem.ProfitMargin" @bind:after="RecalculatePrice" placeholder="0" />
-                    <span class="input-group-text">%</span>
-                </div>
-                <div class="form-text">El precio de venta se calcula con este margen.</div>
-            </div>
-            <div class="col-md-4">
-                <label class="form-label">Precio de venta</label>
-                <div class="input-group">
-                    <span class="input-group-text">@CurrencySymbol</span>
-                    <input type="number" step="0.01" class="form-control fw-bold"
-                           @bind="newItem.Price" readonly="@(newItem.Cost > 0)" required />
-                </div>
-                @if (newItem.Cost > 0)
-                {
-                    <div class="form-text text-success">
-                        Ganancia: <strong>@CurrencySymbol@newItem.ProfitAmount.ToString("N2")</strong> por unidad (calculado)
-                    </div>
-                }
-                else
-                {
-                    <div class="form-text">Sin costo: ingresa el precio manualmente.</div>
-                }
-            </div>
-            <div class="col-12">
-                <h6 class="mt-3">📌 Precios adicionales</h6>
-                <div class="row g-2 align-items-center mb-2">
-                    <div class="col-sm-4">
-                        <input class="form-control form-control-sm" placeholder="Label (e.g., Retail, Wholesale)" @bind="newPriceLabel" />
-                    </div>
-                    <div class="col-sm-3">
-                        <input type="number" step="0.01" class="form-control form-control-sm" placeholder="Amount" @bind="newPriceAmount" />
-                    </div>
-                    <div class="col-sm-3">
-                        <select class="form-select form-select-sm" @bind="newPriceCurrencyId">
-                            @if (currencies.Any())
-                            {
-                                @foreach (var c in currencies)
+
+            <div class="row g-4">
+                <div class="col-12">
+                    <div class="section-card rounded-3 border p-3">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <span class="badge rounded-pill bg-primary-subtle text-primary">1</span>
+                            <h6 class="mb-0 fw-semibold text-secondary">Información básica</h6>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Nombre</label>
+                                <input class="@GetTextInputCss(string.IsNullOrWhiteSpace(newItem.Name))" @bind="newItem.Name" placeholder="Nombre del producto" />
+                                <div class="@GetFeedbackCss(string.IsNullOrWhiteSpace(newItem.Name))">El nombre es obligatorio.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">SKU</label>
+                                <div class="input-group">
+                                    <input class="@GetTextInputCss(!autoGenerateSku && string.IsNullOrWhiteSpace(newItem.SKU))" @bind="newItem.SKU" placeholder="e.g., SKU000001" disabled="@autoGenerateSku" />
+                                    <button class="btn btn-outline-secondary" type="button" @onclick="GenerateSku">Generar</button>
+                                </div>
+                                <div class="@GetFeedbackCss(!autoGenerateSku && string.IsNullOrWhiteSpace(newItem.SKU))">El SKU es obligatorio cuando no se genera automáticamente.</div>
+                                <div class="form-text mt-1">
+                                    <input class="form-check-input me-1" type="checkbox" id="autoSku" @bind="autoGenerateSku" />
+                                    <label class="form-check-label" for="autoSku">Generar SKU automáticamente</label>
+                                </div>
+                                @if (autoGenerateSku)
                                 {
-                                    <option value="@c.Id">@c.Code</option>
+                                    <div class="form-text">Vista previa: <strong>@PreviewSku</strong></div>
                                 }
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Código de barras</label>
+                                <input class="form-control" @bind="newItem.Barcode" placeholder="Escanea o escribe el código" />
+                                <div class="form-text">Se guarda con el producto para escanearlo en notas.</div>
+                            </div>
+                            <div class="col-md-12">
+                                <BarcodeScanner OnScanned="HandleBarcodeScanned" />
+                            </div>
+                            @if (!autoGenerateSku)
+                            {
+                                <div class="col-md-2">
+                                    <label class="form-label">Prefijo</label>
+                                    <input class="form-control" @bind="skuPrefix" placeholder="SKU" />
+                                </div>
+                                <div class="col-md-2">
+                                    <label class="form-label">Dígitos</label>
+                                    <input type="number" class="form-control" @bind="skuDigits" min="1" max="12" />
+                                </div>
                             }
-                        </select>
-                    </div>
-                    <div class="col-sm-2">
-                        <button type="button" class="btn btn-outline-secondary btn-sm w-100" @onclick="AddPriceVariant">➕ Add Price</button>
+                            <div class="col-md-3">
+                                <label class="form-label">Categoría</label>
+                                <select class="@GetSelectCss(newItem.CategoryId == 0)" @bind="newItem.CategoryId">
+                                    @if (!categories.Any())
+                                    {
+                                        <option value="0">Cargando categorías...</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="0">-- Selecciona una categoría --</option>
+                                        @foreach (var category in categories)
+                                        {
+                                            <option value="@category.Id">@category.Name</option>
+                                        }
+                                    }
+                                </select>
+                                <div class="@GetFeedbackCss(newItem.CategoryId == 0)">Selecciona una categoría.</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Moneda</label>
+                                <select class="@GetSelectCss(newItem.CurrencyId == 0)" @bind="newItem.CurrencyId">
+                                    @if (!currencies.Any())
+                                    {
+                                        <option disabled>Cargando monedas...</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="0">-- Selecciona una moneda --</option>
+                                        @foreach (var currency in currencies)
+                                        {
+                                            <option value="@currency.Id">@currency.Code - @currency.Name</option>
+                                        }
+                                    }
+                                </select>
+                                <div class="@GetFeedbackCss(newItem.CurrencyId == 0)">Selecciona una moneda.</div>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Unidad</label>
+                                <select class="form-select" @bind="newItem.Unit">
+                                    @foreach (var unit in Enum.GetValues<UnitType>())
+                                    {
+                                        <option value="@unit">@unit</option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                @if (newItem.PriceVariants != null && newItem.PriceVariants.Any())
-                {
-                    <div class="mb-2">
-                        @foreach (var p in newItem.PriceVariants)
-                        {
-                            <span class="badge bg-light text-dark border me-2 p-2">
-                                <strong>@p.Label:</strong> @p.Amount @(" " + (currencies.FirstOrDefault(c => c.Id == p.CurrencyId)?.Code ?? string.Empty))
-                                <button type="button" class="btn-close ms-2" style="font-size: 0.6rem;" @onclick="() => RemovePriceVariant(p)"></button>
-                            </span>
-                        }
+                <div class="col-12">
+                    <div class="@GetSectionCss(false)">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <span class="badge rounded-pill bg-success-subtle text-success">2</span>
+                            <h6 class="mb-0 fw-semibold text-secondary">Precios e impuestos</h6>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Costo</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">@CurrencySymbol</span>
+                                    <input type="number" step="0.01" min="0" class="@GetTextInputCss(newItem.Cost < 0)"
+                                           @bind="newItem.Cost" @bind:after="RecalculatePrice" placeholder="0.00" />
+                                </div>
+                                <div class="@GetFeedbackCss(newItem.Cost < 0)">El costo no puede ser negativo.</div>
+                                <div class="form-text">Costo de adquisición del producto.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Margen de ganancia</label>
+                                <div class="input-group">
+                                    <input type="number" step="0.01" min="0" class="@GetTextInputCss(newItem.ProfitMargin < 0)"
+                                           @bind="newItem.ProfitMargin" @bind:after="RecalculatePrice" placeholder="0" />
+                                    <span class="input-group-text">%</span>
+                                </div>
+                                <div class="@GetFeedbackCss(newItem.ProfitMargin < 0)">El margen no puede ser negativo.</div>
+                                <div class="form-text">El precio de venta se calcula con este margen.</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Precio de venta</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">@CurrencySymbol</span>
+                                    <input type="number" step="0.01" class="@GetTextInputCss(newItem.Price <= 0) fw-bold"
+                                           @bind="newItem.Price" readonly="@(newItem.Cost > 0)" />
+                                </div>
+                                <div class="@GetFeedbackCss(newItem.Price <= 0)">El precio debe ser mayor que cero.</div>
+                                @if (newItem.Cost > 0)
+                                {
+                                    <div class="form-text text-success">
+                                        Ganancia: <strong>@CurrencySymbol@newItem.ProfitAmount.ToString("N2")</strong> por unidad (calculado)
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="form-text">Sin costo: ingresa el precio manualmente.</div>
+                                }
+                            </div>
+                            <div class="col-12">
+                                <h6 class="mt-2 mb-3">📌 Precios adicionales</h6>
+                                <div class="row g-2 align-items-center mb-2">
+                                    <div class="col-sm-4">
+                                        <input class="form-control form-control-sm" placeholder="Etiqueta (Retail, Mayorista)" @bind="newPriceLabel" />
+                                    </div>
+                                    <div class="col-sm-3">
+                                        <input type="number" step="0.01" class="form-control form-control-sm" placeholder="Monto" @bind="newPriceAmount" />
+                                    </div>
+                                    <div class="col-sm-3">
+                                        <select class="form-select form-select-sm" @bind="newPriceCurrencyId">
+                                            @if (currencies.Any())
+                                            {
+                                                @foreach (var c in currencies)
+                                                {
+                                                    <option value="@c.Id">@c.Code</option>
+                                                }
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-sm-2">
+                                        <button type="button" class="btn btn-outline-secondary btn-sm w-100" @onclick="AddPriceVariant">➕ Añadir</button>
+                                    </div>
+                                </div>
+
+                                @if (newItem.PriceVariants != null && newItem.PriceVariants.Any())
+                                {
+                                    <div class="mb-2">
+                                        @foreach (var p in newItem.PriceVariants)
+                                        {
+                                            <span class="badge bg-light text-dark border me-2 p-2">
+                                                <strong>@p.Label:</strong> @p.Amount @(" " + (currencies.FirstOrDefault(c => c.Id == p.CurrencyId)?.Code ?? string.Empty))
+                                                <button type="button" class="btn-close ms-2" style="font-size: 0.6rem;" @onclick="() => RemovePriceVariant(p)"></button>
+                                            </span>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Aplicar impuestos</label>
+                                @if (!taxes.Any())
+                                {
+                                    <div class="form-text text-muted">No hay impuestos configurados aún.</div>
+                                }
+                                else
+                                {
+                                    <div class="rounded p-2" style="max-height: 220px; overflow-y: auto;">
+                                        @foreach (var tax in taxes)
+                                        {
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="tax-@tax.Id"
+                                                       checked="@selectedTaxIds.Contains(tax.Id)"
+                                                       @onchange="e => ToggleTaxSelection(e, tax.Id)" />
+                                                <label class="form-check-label" for="tax-@tax.Id">
+                                                    @tax.Name (@tax.Rate.ToString("N2")%)
+                                                </label>
+                                            </div>
+                                        }
+                                    </div>
+                                    <div class="form-text mt-2">Los impuestos son opcionales y se aplican desde la lista de impuestos.</div>
+                                }
+                            </div>
+                        </div>
                     </div>
-                }
-            </div>
-            <div class="col-md-4">
-                <label class="form-label">Apply Taxes</label>
-                @if (!taxes.Any())
-                {
-                    <div class="form-text text-muted">No taxes configured yet. Add taxes in the Taxes module.</div>
-                }
-                else
-                {
-                    <div class="border rounded p-2" style="max-height: 220px; overflow-y: auto;">
-                        @foreach (var tax in taxes)
+                </div>
+
+                <div class="col-12">
+                    <div class="@GetSectionCss(StockSectionInvalid)">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <span class="badge rounded-pill bg-warning-subtle text-warning">3</span>
+                            <h6 class="mb-0 fw-semibold text-secondary">Existencias por depósito / tienda</h6>
+                        </div>
+                        @if (!locations.Any())
                         {
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="tax-@tax.Id"
-                                       checked="@selectedTaxIds.Contains(tax.Id)"
-                                       @onchange="e => ToggleTaxSelection(e, tax.Id)" />
-                                <label class="form-check-label" for="tax-@tax.Id">
-                                    @tax.Name (@tax.Rate.ToString("N2")%)
-                                </label>
+                            <div class="alert alert-warning py-2 mb-0">
+                                No hay depósitos ni tiendas registrados.
+                                <a href="/account-locations">Regístralos aquí</a> para poder cargar existencias.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="row g-2 mb-2">
+                                @foreach (var location in locations)
+                                {
+                                    <div class="col-md-4">
+                                        <label class="form-label">
+                                            @location.Name
+                                            <small class="text-muted">(@(location.Type == LocationType.Warehouse ? "Depósito" : "Tienda"))</small>
+                                        </label>
+                                        <input type="number" step="0.1" min="0" class="form-control"
+                                               value="@GetStockInput(location.Id)"
+                                               @onchange="e => SetStockInput(location.Id, e.Value?.ToString())" />
+                                    </div>
+                                }
+                            </div>
+                            @if (StockSectionInvalid)
+                            {
+                                <div class="invalid-feedback d-block">Ingresa existencias en al menos una ubicación.</div>
+                            }
+                            <div class="form-text mb-0">
+                                Total: <strong>@StockInputTotal</strong> @newItem.Unit.
+                                @(isEditing
+                                    ? "Al guardar se ajustan las existencias de las ubicaciones que hayas cambiado."
+                                    : "Estas son las existencias iniciales del artículo.")
                             </div>
                         }
                     </div>
-                    <div class="form-text mt-2">Los impuestos se aplican desde la lista de impuestos; no es necesario ingresar una tasa manual.</div>
-                }
-            </div>
-        </div>
+                </div>
 
-        <h5 class="mt-4 text-secondary">🏬 Existencias por depósito / tienda</h5>
-        @if (!locations.Any())
-        {
-            <div class="alert alert-warning py-2">
-                No hay depósitos ni tiendas registrados.
-                <a href="/account-locations">Regístralos aquí</a> para poder cargar existencias.
-            </div>
-        }
-        else
-        {
-            <div class="row g-2 mb-2">
-                @foreach (var location in locations)
-                {
-                    <div class="col-md-4">
-                        <label class="form-label">
-                            @location.Name
-                            <small class="text-muted">(@(location.Type == LocationType.Warehouse ? "Depósito" : "Tienda"))</small>
-                        </label>
-                        <input type="number" step="0.1" min="0" class="form-control"
-                               value="@GetStockInput(location.Id)"
-                               @onchange="e => SetStockInput(location.Id, e.Value?.ToString())" />
+                <div class="col-12">
+                    <div class="section-card rounded-3 border p-3">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <span class="badge rounded-pill bg-secondary-subtle text-secondary">4</span>
+                            <h6 class="mb-0 fw-semibold text-secondary">Atributos personalizados</h6>
+                        </div>
+                        <div class="row g-2 align-items-center mb-3">
+                            <div class="col-sm-4">
+                                <input class="form-control form-control-sm" @bind="newAttrKey" placeholder="Propiedad (ej. Tamaño, Color)" />
+                            </div>
+                            <div class="col-sm-5">
+                                <input class="form-control form-control-sm" @bind="newAttrValue" placeholder="Valor (ej. 5W-30, Azul)" />
+                            </div>
+                            <div class="col-sm-3">
+                                <button type="button" class="btn btn-outline-secondary btn-sm w-100" @onclick="AddAttribute">➕ Añadir</button>
+                            </div>
+                        </div>
+
+                        @if (newItem.Attributes.Any())
+                        {
+                            <div class="mb-0">
+                                @foreach (var attr in newItem.Attributes)
+                                {
+                                    <span class="badge bg-light text-dark border me-2 p-2">
+                                        <strong>@attr.Name:</strong> @attr.Value
+                                        <button type="button" class="btn-close ms-2" style="font-size: 0.6rem;" @onclick="() => newItem.Attributes.Remove(attr)"></button>
+                                    </span>
+                                }
+                            </div>
+                        }
                     </div>
-                }
+                </div>
             </div>
-            <div class="form-text mb-3">
-                Total: <strong>@StockInputTotal</strong> @newItem.Unit.
-                @(isEditing
-                    ? "Al guardar se ajustan las existencias de las ubicaciones que hayas cambiado."
-                    : "Estas son las existencias iniciales del artículo.")
-            </div>
-        }
 
-        <h5 class="mt-4 text-secondary">⚙️ Custom Attributes (Specifications)</h5>
-        <div class="row g-2 align-items-center mb-3">
-            <div class="col-sm-4">
-                <input class="form-control form-control-sm" @bind="newAttrKey" placeholder="Property (e.g., Viscosity, Size)" />
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2 mt-4">
+                <div class="text-muted small">Completa los campos obligatorios para guardar el producto.</div>
+                <div class="d-grid gap-2 d-md-flex">
+                    <button type="submit" class="btn btn-primary">@(isEditing ? "💾 Guardar cambios" : "💾 Guardar producto")</button>
+                    <button type="button" class="btn btn-secondary" @onclick="() => OnCancel.InvokeAsync()">✖️ Cancelar</button>
+                </div>
             </div>
-            <div class="col-sm-5">
-                <input class="form-control form-control-sm" @bind="newAttrValue" placeholder="Value (e.g., 5W-30, 2 inches)" />
-            </div>
-            <div class="col-sm-3">
-                <button type="button" class="btn btn-outline-secondary btn-sm w-100" @onclick="AddAttribute">➕ Add Attr</button>
-            </div>
-        </div>
-
-        @if (newItem.Attributes.Any())
-        {
-            <div class="mb-3">
-                @foreach (var attr in newItem.Attributes)
-                {
-                    <span class="badge bg-light text-dark border me-2 p-2">
-                        <strong>@attr.Name:</strong> @attr.Value
-                        <button type="button" class="btn-close ms-2" style="font-size: 0.6rem;" @onclick="() => newItem.Attributes.Remove(attr)"></button>
-                    </span>
-                }
-            </div>
-        }
-
-        <div class="d-grid gap-2">
-            <button type="submit" class="btn btn-primary mt-2 w-100">@(isEditing ? "💾 Guardar cambios" : "💾 Save Item to Inventory")</button>
-            <button type="button" class="btn btn-secondary mt-1 w-100" @onclick="() => OnCancel.InvokeAsync()">✖️ Cancelar</button>
-        </div>
-    </EditForm>
+        </EditForm>
+    </div>
 </div>
+
+<style>
+    .section-card {
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    }
+</style>
 
 @code {
     [Parameter] public EventCallback OnItemSaved { get; set; }
@@ -277,7 +343,11 @@
     [Parameter] public ItemUniversal? ItemToEdit { get; set; }
 
     private bool isEditing;
-private ItemUniversal newItem = new();
+    private ItemUniversal newItem = new();
+
+    private static string GetTextInputCss(bool invalid) => invalid ? "form-control is-invalid" : "form-control";
+    private static string GetSelectCss(bool invalid) => invalid ? "form-select is-invalid" : "form-select";
+    private static string GetFeedbackCss(bool invalid) => invalid ? "invalid-feedback d-block" : "invalid-feedback";
     private List<ItemUniversal> existingItems = new();
     private List<Currency> currencies = new();
     private List<Category> categories = new();
@@ -287,6 +357,7 @@ private ItemUniversal newItem = new();
     private string newAttrValue = "";
     private string newPriceLabel = string.Empty;
     private decimal newPriceAmount = 0m;
+    private bool showValidationErrors;
     private int newPriceCurrencyId = 0;
     private bool autoGenerateSku = true;
     private string skuPrefix = string.Empty;
@@ -420,6 +491,9 @@ private ItemUniversal newItem = new();
         }
     }
 
+    private bool StockSectionInvalid => showValidationErrors && !isEditing && StockInputTotal <= 0;
+    private static string GetSectionCss(bool invalid) => invalid ? "section-card rounded-3 border border-danger p-3" : "section-card rounded-3 border p-3";
+
     private string PreviewSku => GenerateFormattedSku(GetNextSkuNumber());
 
     private void GenerateSku()
@@ -513,6 +587,7 @@ private ItemUniversal newItem = new();
 
     private async Task HandleSubmit()
     {
+        showValidationErrors = true;
         feedbackMessage = string.Empty;
         feedbackClass = string.Empty;
 
@@ -524,8 +599,8 @@ private ItemUniversal newItem = new();
         // Aseguramos que el precio quede alineado con costo + margen antes de enviar.
         RecalculatePrice();
 
-        // Al editar permitimos stock 0 (un producto existente puede quedar sin existencias).
-        var stockInvalid = isEditing ? newItem.Stock < 0 : newItem.Stock <= 0;
+        var totalStock = isEditing ? newItem.Stock : StockInputTotal;
+        var stockInvalid = isEditing ? newItem.Stock < 0 : totalStock <= 0;
 
         if (string.IsNullOrWhiteSpace(newItem.SKU)
             || string.IsNullOrWhiteSpace(newItem.Name)
@@ -552,7 +627,7 @@ private ItemUniversal newItem = new();
                 .Select(l => new ItemStock { LocationId = l.Id, Quantity = GetStockInput(l.Id) })
                 .ToList();
 
-        newItem.Stock = isEditing ? newItem.Stock : StockInputTotal;
+        newItem.Stock = totalStock;
 
         var success = isEditing
             ? await ApiService.UpdateItemAsync(newItem)

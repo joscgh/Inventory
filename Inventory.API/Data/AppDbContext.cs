@@ -1,4 +1,4 @@
-﻿using Inventory.Core;
+using Inventory.Core;
 using Inventory.Core.Classes;
 using Microsoft.EntityFrameworkCore;
 
@@ -26,6 +26,10 @@ namespace Inventory.API.Data
         public DbSet<Inventory.Core.Classes.AccountLocation> AccountLocations { get; set; }
         public DbSet<Inventory.Core.Classes.AccountLogo> AccountLogos { get; set; }
         public DbSet<Inventory.Core.Classes.ItemStock> ItemStocks { get; set; }
+        public DbSet<Inventory.Core.Classes.Terminal> Terminals { get; set; }
+        public DbSet<Inventory.Core.Classes.InvoiceNumberRange> InvoiceNumberRanges { get; set; }
+        public DbSet<Inventory.Core.Classes.Invoice> Invoices { get; set; }
+        public DbSet<Inventory.Core.Classes.InvoiceLine> InvoiceLines { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -244,6 +248,145 @@ namespace Inventory.API.Data
 
             modelBuilder.Entity<Inventory.Core.Classes.ConsumerCustomer>()
                 .HasKey(c => c.Id);
+
+            // ---------------------------------------------------------------
+            // Facturación fiscal
+            // ---------------------------------------------------------------
+
+            modelBuilder.Entity<Inventory.Core.Classes.Terminal>()
+                .HasKey(t => t.Id);
+
+            // Dentro de una cuenta, ni el código ni la serie se repiten entre cajas:
+            // dos terminales con la misma serie romperían la unicidad del correlativo.
+            modelBuilder.Entity<Inventory.Core.Classes.Terminal>()
+                .HasIndex(t => new { t.CustomerAccountId, t.Code })
+                .IsUnique();
+
+            modelBuilder.Entity<Inventory.Core.Classes.Terminal>()
+                .HasIndex(t => new { t.CustomerAccountId, t.Serie })
+                .IsUnique();
+
+            modelBuilder.Entity<Inventory.Core.Classes.Terminal>()
+                .HasOne(t => t.Account)
+                .WithMany()
+                .HasForeignKey(t => t.CustomerAccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Inventory.Core.Classes.Terminal>()
+                .HasOne(t => t.Store)
+                .WithMany()
+                .HasForeignKey(t => t.StoreId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Inventory.Core.Classes.InvoiceNumberRange>()
+                .HasKey(r => r.Id);
+
+            modelBuilder.Entity<Inventory.Core.Classes.InvoiceNumberRange>()
+                .HasOne(r => r.Terminal)
+                .WithMany(t => t.Ranges)
+                .HasForeignKey(r => r.TerminalId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Una misma caja no puede recibir dos veces el mismo bloque.
+            modelBuilder.Entity<Inventory.Core.Classes.InvoiceNumberRange>()
+                .HasIndex(r => new { r.TerminalId, r.DocumentType, r.FromNumber })
+                .IsUnique();
+
+            modelBuilder.Entity<Inventory.Core.Classes.Invoice>()
+                .HasKey(i => i.Id);
+
+            // La red de seguridad de todo el esquema offline: aunque una caja se
+            // equivoque o se restaure un respaldo viejo, la base rechaza un
+            // correlativo repetido dentro de la misma serie.
+            modelBuilder.Entity<Inventory.Core.Classes.Invoice>()
+                .HasIndex(i => new { i.CustomerAccountId, i.DocumentType, i.Serie, i.Number })
+                .IsUnique();
+
+            // Idempotencia de la sincronización: el reintento del POS no duplica.
+            modelBuilder.Entity<Inventory.Core.Classes.Invoice>()
+                .HasIndex(i => i.ClientGuid)
+                .IsUnique();
+
+            modelBuilder.Entity<Inventory.Core.Classes.Invoice>()
+                .HasOne(i => i.Terminal)
+                .WithMany()
+                .HasForeignKey(i => i.TerminalId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Inventory.Core.Classes.Invoice>()
+                .HasOne(i => i.NumberRange)
+                .WithMany()
+                .HasForeignKey(i => i.InvoiceNumberRangeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Inventory.Core.Classes.Invoice>()
+                .HasOne(i => i.CustomerAccount)
+                .WithMany()
+                .HasForeignKey(i => i.CustomerAccountId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Inventory.Core.Classes.Invoice>()
+                .HasOne(i => i.Store)
+                .WithMany()
+                .HasForeignKey(i => i.StoreId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Inventory.Core.Classes.Invoice>()
+                .HasOne(i => i.Warehouse)
+                .WithMany()
+                .HasForeignKey(i => i.WarehouseId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Inventory.Core.Classes.Invoice>()
+                .HasOne(i => i.CreatedByUser)
+                .WithMany()
+                .HasForeignKey(i => i.CreatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Inventory.Core.Classes.Invoice>()
+                .HasOne(i => i.ConsumerCustomer)
+                .WithMany()
+                .HasForeignKey(i => i.ConsumerCustomerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Inventory.Core.Classes.Invoice>()
+                .HasOne(i => i.Currency)
+                .WithMany()
+                .HasForeignKey(i => i.CurrencyId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Inventory.Core.Classes.Invoice>()
+                .HasOne(i => i.ReferenceInvoice)
+                .WithMany(i => i.ReferencedByInvoices)
+                .HasForeignKey(i => i.ReferenceInvoiceId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Inventory.Core.Classes.Invoice>()
+                .HasMany(i => i.Lines)
+                .WithOne(l => l.Invoice)
+                .HasForeignKey(l => l.InvoiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Inventory.Core.Classes.InvoiceLine>()
+                .HasKey(l => l.Id);
+
+            modelBuilder.Entity<Inventory.Core.Classes.InvoiceLine>()
+                .HasOne(l => l.Item)
+                .WithMany()
+                .HasForeignKey(l => l.ItemUniversalId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Inventory.Core.Classes.InvoiceLine>()
+                .HasOne(l => l.Category)
+                .WithMany()
+                .HasForeignKey(l => l.CategoryId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Inventory.Core.Classes.InvoiceLine>()
+                .HasOne(l => l.Currency)
+                .WithMany()
+                .HasForeignKey(l => l.CurrencyId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }

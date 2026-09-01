@@ -1,7 +1,10 @@
 @page "/notas"
 @using Inventory.Core.Classes
-@using Inventory.RazorLib.Services
+@using Inventory.SharedUI.Services
+@using Microsoft.JSInterop
 @inject NoteApiService NoteApi
+@inject Microsoft.JSInterop.IJSRuntime JSRuntime
+@inject CustomerAccountApiService AccountApi
 
 <div class="container-fluid mt-4">
     <div class="page-header mb-4">
@@ -125,7 +128,33 @@
                     </h5>
                     <button type="button" class="btn-close" @onclick="CloseDetail"></button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body" id="printable-note">
+                    <div class="d-flex align-items-start gap-3 border-bottom pb-3 mb-3">
+                        @if (issuerAccount?.HasLogo == true)
+                        {
+                            <img src="@AccountApi.GetLogoUrl(issuerAccount.Id, logoVersion)" alt="Logo de @issuerAccount.Name"
+                                 style="max-height:70px; max-width:160px; object-fit:contain;" />
+                        }
+                        <div class="flex-grow-1">
+                            <h5 class="mb-1">@(issuerAccount?.Name ?? "Nota")</h5>
+                            @if (issuerAccount != null)
+                            {
+                                @if (!string.IsNullOrWhiteSpace(issuerAccount.Document))
+                                {
+                                    <div class="small text-muted">RIF: @issuerAccount.Document</div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(issuerAccount.Address))
+                                {
+                                    <div class="small text-muted">@issuerAccount.Address</div>
+                                }
+                            }
+                        </div>
+                        <div class="text-end">
+                            <div class="fw-bold">@GetTypeLabel(selectedNote.Type)</div>
+                            <div class="small">@selectedNote.NoteNumber</div>
+                            <div class="small text-muted">@selectedNote.IssueDate.ToString("dd/MM/yyyy")</div>
+                        </div>
+                    </div>
                     <div class="row g-3 mb-3">
                         <div class="col-sm-6">
                             <div class="text-muted small">Cliente</div>
@@ -225,7 +254,8 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" @onclick="CloseDetail">Cerrar</button>
-                </div>
+                    <button type="button" class="btn btn-primary" @onclick="PrintNote">Exportar PDF</button>
+                    </div>
             </div>
         </div>
     </div>
@@ -241,8 +271,26 @@
     private DateTime? filterDateFrom;
     private DateTime? filterDateTo;
     private Note? selectedNote;
+    private Inventory.Core.Classes.CustomerAccount? issuerAccount;
+    private int logoVersion = 0;
 
-    private void ShowDetail(Note note) => selectedNote = note;
+    private async Task ShowDetail(Note note)
+    {
+        selectedNote = note;
+        issuerAccount = null;
+        try
+        {
+            var accountId = selectedNote?.Store?.CustomerAccountId ?? 0;
+            if (accountId != 0)
+            {
+                issuerAccount = await AccountApi.GetAccountByIdAsync(accountId);
+            }
+        }
+        catch
+        {
+            issuerAccount = null;
+        }
+    }
 
     private void CloseDetail() => selectedNote = null;
 
@@ -329,5 +377,10 @@
         }
 
         return "Bs";
+    }
+
+    private Task PrintNote()
+    {
+        return JSRuntime.InvokeVoidAsync("printNote.print", "printable-note", "Documento no fiscal").AsTask();
     }
 }

@@ -22,9 +22,9 @@
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />
     <link href="Inventory.APP.styles.css" rel="stylesheet" />
-    <link href="manifest.webmanifest" rel="manifest" />
-    <link rel="apple-touch-icon" sizes="512x512" href="icon-512.png" />
-    <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png" />
+    <link href="/manifest.webmanifest" rel="manifest" />
+    <link rel="apple-touch-icon" sizes="512x512" href="/icon-512.png" />
+    <link rel="apple-touch-icon" sizes="192x192" href="/icon-192.png" />
 </head>
 
 <body>
@@ -41,9 +41,114 @@
         <a href="" class="reload">Reload</a>
         <a class="dismiss">🗙</a>
     </div>
-    <script src="_content/Inventory.RazorLib/lib/zxing.min.js"></script>
+    <div id="pwa-status" style="display:none; position:fixed; left:12px; right:12px; bottom:12px; z-index:9999; padding:10px 12px; border-radius:8px; background:#fff3cd; color:#664d03; box-shadow:0 2px 12px rgba(0,0,0,.18);">
+        <span id="pwa-status-text"></span>
+        <button id="pwa-status-close" aria-label="Cerrar mensaje" style="margin-left:12px; background:transparent; border:0; font-size:16px; cursor:pointer; color:inherit;">✕</button>
+    </div>
+    <button id="pwa-install-button" type="button" style="display:none; position:fixed; right:12px; bottom:90px; z-index:9999; border:0; border-radius:999px; background:#03173d; color:#fff; padding:10px 14px; box-shadow:0 2px 12px rgba(0,0,0,.2);">Instalar app</button>
+    <script src="_content/Inventory.SharedUI/lib/zxing.min.js"></script>
+    <script src="js/printNote.js"></script>
     <script src="_framework/blazor.webassembly.js"></script>
-    <script>navigator.serviceWorker.register('service-worker.js');</script>
+    <script>
+        window.addEventListener('load', function () {
+            const statusEl = document.getElementById('pwa-status');
+            const statusTextEl = document.getElementById('pwa-status-text');
+            const statusCloseBtn = document.getElementById('pwa-status-close');
+            const installBtn = document.getElementById('pwa-install-button');
+            let deferredPrompt = null;
+            let statusTimeout = null;
+
+            const hideStatus = function () {
+                if (!statusEl) return;
+                statusEl.style.display = 'none';
+                statusTextEl.textContent = '';
+                if (statusTimeout) { clearTimeout(statusTimeout); statusTimeout = null; }
+            };
+
+            if (statusCloseBtn) {
+                statusCloseBtn.addEventListener('click', hideStatus);
+            }
+
+            const showStatus = function (message, isError, autoDismissMs) {
+                if (!statusEl) return;
+                statusTextEl.textContent = message;
+                statusEl.style.display = 'block';
+                statusEl.style.background = isError ? '#fdecea' : '#fff3cd';
+                statusEl.style.color = isError ? '#8a1c1c' : '#664d03';
+                if (statusTimeout) { clearTimeout(statusTimeout); statusTimeout = null; }
+                if (!isError && autoDismissMs && typeof autoDismissMs === 'number') {
+                    statusTimeout = setTimeout(hideStatus, autoDismissMs);
+                }
+            };
+
+            const showInstallButton = function () {
+                if (!installBtn) return;
+                installBtn.style.display = 'block';
+            };
+
+            const hideInstallButton = function () {
+                if (!installBtn) return;
+                installBtn.style.display = 'none';
+            };
+
+            if ('serviceWorker' in navigator) {
+                const isSecureContext = window.isSecureContext || location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.protocol === 'https:';
+                if (!isSecureContext) {
+                    console.warn('PWA: HTTPS/localhost is required for service worker registration.');
+                    showStatus('La instalación como app requiere abrir este sitio en HTTPS o localhost.', true);
+                    return;
+                }
+
+                navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
+                    .then(function (registration) {
+                        console.log('PWA: service worker registered.', registration);
+                        showStatus('La app está lista para instalarse. Puedes usar el botón de abajo o el menú del navegador.', false);
+                    })
+                    .catch(function (error) {
+                        console.error('PWA: service worker registration failed.', error);
+                        showStatus('No se pudo inicializar la instalación de la app. Asegúrate de abrir el sitio en HTTPS y de que el navegador permita PWA.', true);
+                    });
+            }
+
+            window.addEventListener('beforeinstallprompt', function (event) {
+                event.preventDefault();
+                deferredPrompt = event;
+                showInstallButton();
+                showStatus('El navegador detectó la app. Pulsa el botón de instalar para continuar.', false);
+            });
+
+            window.addEventListener('appinstalled', function () {
+                hideInstallButton();
+                showStatus('La app se instaló correctamente.', false);
+            });
+
+            if (installBtn) {
+                installBtn.addEventListener('click', function () {
+                    if (!deferredPrompt) {
+                        showStatus('Tu navegador no mostró el aviso de instalación. Prueba desde el menú de tres puntos > Instalar app.', true);
+                        return;
+                    }
+
+                    deferredPrompt.prompt();
+                    deferredPrompt.userChoice.then(function (choiceResult) {
+                        if (choiceResult.outcome === 'accepted') {
+                            showStatus('Instalación aceptada. Se abrirá la app instalada.', false);
+                        } else {
+                            showStatus('La instalación se canceló. Puedes volver a intentarlo desde el menú del navegador.', true);
+                        }
+                        deferredPrompt = null;
+                        hideInstallButton();
+                    });
+                });
+            }
+
+            setTimeout(function () {
+                if (!deferredPrompt) {
+                    console.info('PWA: no install prompt available yet; the browser may require a user interaction or a supported install context.');
+                }
+            }, 4000);
+        });
+    </script>
 </body>
 
 </html>

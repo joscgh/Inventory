@@ -22,6 +22,66 @@ namespace Inventory.API.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("Inventory.Core.Classes.AccountLocation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("CustomerAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Phone")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Rif")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomerAccountId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("AccountLocations");
+                });
+
+            modelBuilder.Entity("Inventory.Core.Classes.AccountLogo", b =>
+                {
+                    b.Property<int>("CustomerAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<byte[]>("Data")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("CustomerAccountId");
+
+                    b.ToTable("AccountLogos");
+                });
+
             modelBuilder.Entity("Inventory.Core.Classes.Attribute", b =>
                 {
                     b.Property<string>("Name")
@@ -215,6 +275,9 @@ namespace Inventory.API.Migrations
                     b.Property<int>("ItemId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("LocationId")
+                        .HasColumnType("integer");
+
                     b.Property<double>("NewStock")
                         .HasColumnType("double precision");
 
@@ -244,7 +307,263 @@ namespace Inventory.API.Migrations
 
                     b.HasIndex("ItemId");
 
+                    b.HasIndex("LocationId");
+
                     b.ToTable("Adjustments");
+                });
+
+            modelBuilder.Entity("Inventory.Core.Classes.Invoice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid>("ClientGuid")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("ConsumerCustomerId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ControlNumber")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("CreatedByUserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("CurrencyId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("CustomerAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("CustomerAddress")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("CustomerDocument")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("CustomerName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("CustomerPhone")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("DocumentType")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("ExchangeRate")
+                        .HasColumnType("numeric");
+
+                    b.Property<int?>("InvoiceNumberRangeId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("IssuedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Notes")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("Number")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("ReceivedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("ReferenceInvoiceId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Serie")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("StoreId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Subtotal")
+                        .HasColumnType("numeric");
+
+                    b.Property<int>("TerminalId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Total")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("TotalTax")
+                        .HasColumnType("numeric");
+
+                    b.Property<string>("VoidReason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("VoidedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("WarehouseId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClientGuid")
+                        .IsUnique();
+
+                    b.HasIndex("ConsumerCustomerId");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.HasIndex("CurrencyId");
+
+                    b.HasIndex("InvoiceNumberRangeId");
+
+                    b.HasIndex("ReferenceInvoiceId");
+
+                    b.HasIndex("StoreId");
+
+                    b.HasIndex("TerminalId");
+
+                    b.HasIndex("WarehouseId");
+
+                    b.HasIndex("CustomerAccountId", "DocumentType", "Serie", "Number")
+                        .IsUnique();
+
+                    b.ToTable("Invoices");
+                });
+
+            modelBuilder.Entity("Inventory.Core.Classes.InvoiceLine", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int?>("CategoryId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("CurrencyId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("Discount")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal?>("ExchangeRate")
+                        .HasColumnType("numeric");
+
+                    b.Property<int>("InvoiceId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ItemUniversalId")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("TaxRate")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("UnitPrice")
+                        .HasColumnType("numeric");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("CurrencyId");
+
+                    b.HasIndex("InvoiceId");
+
+                    b.HasIndex("ItemUniversalId");
+
+                    b.ToTable("InvoiceLines");
+                });
+
+            modelBuilder.Entity("Inventory.Core.Classes.InvoiceNumberRange", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AssignedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Authorization")
+                        .HasColumnType("text");
+
+                    b.Property<long>("ControlFromNumber")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ControlPrefix")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("DocumentType")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("FromNumber")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("NextNumber")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Serie")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TerminalId")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("ToNumber")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TerminalId", "DocumentType", "FromNumber")
+                        .IsUnique();
+
+                    b.ToTable("InvoiceNumberRanges");
+                });
+
+            modelBuilder.Entity("Inventory.Core.Classes.ItemStock", b =>
+                {
+                    b.Property<int>("ItemId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("LocationId")
+                        .HasColumnType("integer");
+
+                    b.Property<double>("Quantity")
+                        .HasColumnType("double precision");
+
+                    b.HasKey("ItemId", "LocationId");
+
+                    b.HasIndex("LocationId");
+
+                    b.ToTable("ItemStocks");
                 });
 
             modelBuilder.Entity("Inventory.Core.Classes.ItemUniversal", b =>
@@ -261,6 +580,9 @@ namespace Inventory.API.Migrations
                     b.Property<int>("CategoryId")
                         .HasColumnType("integer");
 
+                    b.Property<decimal>("Cost")
+                        .HasColumnType("numeric");
+
                     b.Property<int>("CurrencyId")
                         .HasColumnType("integer");
 
@@ -269,6 +591,9 @@ namespace Inventory.API.Migrations
                         .HasColumnType("text");
 
                     b.Property<decimal>("Price")
+                        .HasColumnType("numeric");
+
+                    b.Property<decimal>("ProfitMargin")
                         .HasColumnType("numeric");
 
                     b.Property<string>("SKU")
@@ -347,6 +672,9 @@ namespace Inventory.API.Migrations
                     b.Property<int?>("ReferenceNoteId")
                         .HasColumnType("integer");
 
+                    b.Property<int?>("StoreId")
+                        .HasColumnType("integer");
+
                     b.Property<decimal>("Subtotal")
                         .HasColumnType("numeric");
 
@@ -362,6 +690,9 @@ namespace Inventory.API.Migrations
                     b.Property<string>("ValidityPeriod")
                         .HasColumnType("text");
 
+                    b.Property<int?>("WarehouseId")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ConsumerCustomerId");
@@ -373,6 +704,10 @@ namespace Inventory.API.Migrations
                     b.HasIndex("CustomerAccountId");
 
                     b.HasIndex("ReferenceNoteId");
+
+                    b.HasIndex("StoreId");
+
+                    b.HasIndex("WarehouseId");
 
                     b.ToTable("Notes");
                 });
@@ -477,6 +812,54 @@ namespace Inventory.API.Migrations
                     b.ToTable("Taxes");
                 });
 
+            modelBuilder.Entity("Inventory.Core.Classes.Terminal", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("CustomerAccountId")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("DeviceIdentifier")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Serie")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int?>("StoreId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StoreId");
+
+                    b.HasIndex("CustomerAccountId", "Code")
+                        .IsUnique();
+
+                    b.HasIndex("CustomerAccountId", "Serie")
+                        .IsUnique();
+
+                    b.ToTable("Terminals");
+                });
+
             modelBuilder.Entity("ItemUniversalTax", b =>
                 {
                     b.Property<int>("ItemsId")
@@ -490,6 +873,28 @@ namespace Inventory.API.Migrations
                     b.HasIndex("TaxesId");
 
                     b.ToTable("ItemUniversalTax");
+                });
+
+            modelBuilder.Entity("Inventory.Core.Classes.AccountLocation", b =>
+                {
+                    b.HasOne("Inventory.Core.Classes.CustomerAccount", "Account")
+                        .WithMany("Locations")
+                        .HasForeignKey("CustomerAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Account");
+                });
+
+            modelBuilder.Entity("Inventory.Core.Classes.AccountLogo", b =>
+                {
+                    b.HasOne("Inventory.Core.Classes.CustomerAccount", "Account")
+                        .WithOne()
+                        .HasForeignKey("Inventory.Core.Classes.AccountLogo", "CustomerAccountId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Account");
                 });
 
             modelBuilder.Entity("Inventory.Core.Classes.Attribute", b =>
@@ -519,7 +924,145 @@ namespace Inventory.API.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("Inventory.Core.Classes.AccountLocation", "Location")
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.Navigation("Item");
+
+                    b.Navigation("Location");
+                });
+
+            modelBuilder.Entity("Inventory.Core.Classes.Invoice", b =>
+                {
+                    b.HasOne("Inventory.Core.Classes.ConsumerCustomer", "ConsumerCustomer")
+                        .WithMany()
+                        .HasForeignKey("ConsumerCustomerId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Inventory.Core.Classes.CustomerAccountUser", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Inventory.Core.Classes.Currency", "Currency")
+                        .WithMany()
+                        .HasForeignKey("CurrencyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Inventory.Core.Classes.CustomerAccount", "CustomerAccount")
+                        .WithMany()
+                        .HasForeignKey("CustomerAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Inventory.Core.Classes.InvoiceNumberRange", "NumberRange")
+                        .WithMany()
+                        .HasForeignKey("InvoiceNumberRangeId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Inventory.Core.Classes.Invoice", "ReferenceInvoice")
+                        .WithMany("ReferencedByInvoices")
+                        .HasForeignKey("ReferenceInvoiceId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Inventory.Core.Classes.AccountLocation", "Store")
+                        .WithMany()
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Inventory.Core.Classes.Terminal", "Terminal")
+                        .WithMany()
+                        .HasForeignKey("TerminalId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Inventory.Core.Classes.AccountLocation", "Warehouse")
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ConsumerCustomer");
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("Currency");
+
+                    b.Navigation("CustomerAccount");
+
+                    b.Navigation("NumberRange");
+
+                    b.Navigation("ReferenceInvoice");
+
+                    b.Navigation("Store");
+
+                    b.Navigation("Terminal");
+
+                    b.Navigation("Warehouse");
+                });
+
+            modelBuilder.Entity("Inventory.Core.Classes.InvoiceLine", b =>
+                {
+                    b.HasOne("Inventory.Core.Classes.Category", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Inventory.Core.Classes.Currency", "Currency")
+                        .WithMany()
+                        .HasForeignKey("CurrencyId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Inventory.Core.Classes.Invoice", "Invoice")
+                        .WithMany("Lines")
+                        .HasForeignKey("InvoiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Inventory.Core.Classes.ItemUniversal", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemUniversalId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Category");
+
+                    b.Navigation("Currency");
+
+                    b.Navigation("Invoice");
+
+                    b.Navigation("Item");
+                });
+
+            modelBuilder.Entity("Inventory.Core.Classes.InvoiceNumberRange", b =>
+                {
+                    b.HasOne("Inventory.Core.Classes.Terminal", "Terminal")
+                        .WithMany("Ranges")
+                        .HasForeignKey("TerminalId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Terminal");
+                });
+
+            modelBuilder.Entity("Inventory.Core.Classes.ItemStock", b =>
+                {
+                    b.HasOne("Inventory.Core.Classes.ItemUniversal", "Item")
+                        .WithMany("StockByLocation")
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Inventory.Core.Classes.AccountLocation", "Location")
+                        .WithMany()
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+
+                    b.Navigation("Location");
                 });
 
             modelBuilder.Entity("Inventory.Core.Classes.ItemUniversal", b =>
@@ -569,6 +1112,16 @@ namespace Inventory.API.Migrations
                         .HasForeignKey("ReferenceNoteId")
                         .OnDelete(DeleteBehavior.Restrict);
 
+                    b.HasOne("Inventory.Core.Classes.AccountLocation", "Store")
+                        .WithMany()
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("Inventory.Core.Classes.AccountLocation", "Warehouse")
+                        .WithMany()
+                        .HasForeignKey("WarehouseId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("ConsumerCustomer");
 
                     b.Navigation("CreatedByUser");
@@ -578,6 +1131,10 @@ namespace Inventory.API.Migrations
                     b.Navigation("CustomerAccount");
 
                     b.Navigation("ReferenceNote");
+
+                    b.Navigation("Store");
+
+                    b.Navigation("Warehouse");
                 });
 
             modelBuilder.Entity("Inventory.Core.Classes.NoteLine", b =>
@@ -623,6 +1180,24 @@ namespace Inventory.API.Migrations
                     b.Navigation("Item");
                 });
 
+            modelBuilder.Entity("Inventory.Core.Classes.Terminal", b =>
+                {
+                    b.HasOne("Inventory.Core.Classes.CustomerAccount", "Account")
+                        .WithMany()
+                        .HasForeignKey("CustomerAccountId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Inventory.Core.Classes.AccountLocation", "Store")
+                        .WithMany()
+                        .HasForeignKey("StoreId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("Account");
+
+                    b.Navigation("Store");
+                });
+
             modelBuilder.Entity("ItemUniversalTax", b =>
                 {
                     b.HasOne("Inventory.Core.Classes.ItemUniversal", null)
@@ -655,7 +1230,16 @@ namespace Inventory.API.Migrations
 
             modelBuilder.Entity("Inventory.Core.Classes.CustomerAccount", b =>
                 {
+                    b.Navigation("Locations");
+
                     b.Navigation("Users");
+                });
+
+            modelBuilder.Entity("Inventory.Core.Classes.Invoice", b =>
+                {
+                    b.Navigation("Lines");
+
+                    b.Navigation("ReferencedByInvoices");
                 });
 
             modelBuilder.Entity("Inventory.Core.Classes.ItemUniversal", b =>
@@ -663,6 +1247,8 @@ namespace Inventory.API.Migrations
                     b.Navigation("Attributes");
 
                     b.Navigation("PriceVariants");
+
+                    b.Navigation("StockByLocation");
                 });
 
             modelBuilder.Entity("Inventory.Core.Classes.Note", b =>
@@ -670,6 +1256,11 @@ namespace Inventory.API.Migrations
                     b.Navigation("Lines");
 
                     b.Navigation("ReferencedByNotes");
+                });
+
+            modelBuilder.Entity("Inventory.Core.Classes.Terminal", b =>
+                {
+                    b.Navigation("Ranges");
                 });
 #pragma warning restore 612, 618
         }

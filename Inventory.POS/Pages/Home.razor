@@ -1,0 +1,26 @@
+﻿@page "/"
+
+@inject NavigationManager Navigation
+
+<PageTitle>POS</PageTitle>
+
+<div class="container py-5">
+	<div class="row justify-content-center">
+		<div class="col-lg-8">
+			<div class="card shadow-sm border-0">
+				<div class="card-body p-5 text-center">
+					<h1 class="mb-3">🧾 Punto de venta</h1>
+					<p class="text-muted mb-4">App separada para facturación conectada a la misma API del inventario.</p>
+					<button class="btn btn-primary btn-lg" @onclick="GoToBilling">Abrir facturación</button>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+@code {
+	private void GoToBilling()
+	{
+		Navigation.NavigateTo("/facturacion");
+	}
+}

@@ -1,14 +1,4 @@
 @page "/logout"
-@using Inventory.RazorLib.Services
-@inject UserStateService UserState
-@inject NavigationManager Navigation
+@using Inventory.SharedUI.Components
 
-<h3>Cerrando sesión...</h3>
-
-@code {
-    protected override async Task OnInitializedAsync()
-    {
-        await UserState.LogoutAsync();
-        Navigation.NavigateTo("/login", true);
-    }
-}
+<LogoutView RedirectTo="/login" />

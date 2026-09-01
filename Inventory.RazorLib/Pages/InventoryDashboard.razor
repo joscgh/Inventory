@@ -1,7 +1,7 @@
 ﻿@page "/inventory"
 @using Inventory.Core.Classes
 @using Inventory.Core.Enums
-@using Inventory.RazorLib.Services
+@using Inventory.SharedUI.Services
 @using Inventory.RazorLib.Components
 @inject ItemApiService ApiService
 @inject CustomerAccountApiService AccountApi
@@ -108,8 +108,8 @@
     <div class="card shadow-sm">
         <div class="card-body p-0">
             <div class="table-responsive">
-                <table class="table table-hover table-striped align-middle mb-0">
-                    <thead class="table-dark">
+                <table class="table table-hover align-middle">
+                    <thead>
                         <tr>
                             @* <th>SKU</th> *@
                             <th>Name</th>

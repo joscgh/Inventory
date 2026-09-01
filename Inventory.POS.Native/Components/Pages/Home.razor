@@ -1,0 +1,20 @@
+﻿@page "/"
+
+@inject NavigationManager Navigation
+
+<div class="container py-5">
+	<div class="card shadow-sm border-0">
+		<div class="card-body text-center p-5">
+			<h1 class="mb-3">🧾 POS nativo</h1>
+			<p class="text-muted mb-4">Conectado a Inventory.API para emitir facturas desde la app instalada.</p>
+			<button class="btn btn-primary btn-lg" @onclick="GoToBilling">Abrir facturación</button>
+		</div>
+	</div>
+</div>
+
+@code {
+	private void GoToBilling()
+	{
+		Navigation.NavigateTo("/facturacion");
+	}
+}

@@ -1,0 +1,16 @@
+@using Inventory.SharedUI.Services
+@inject UserStateService UserState
+@inject NavigationManager Navigation
+
+<h3>Cerrando sesión...</h3>
+
+@code {
+    /// <summary>Pantalla de login de la app que envuelve este componente.</summary>
+    [Parameter] public string RedirectTo { get; set; } = "/login";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await UserState.LogoutAsync();
+        Navigation.NavigateTo(RedirectTo, true);
+    }
+}

@@ -1,5 +1,5 @@
 ﻿@using Inventory.Core.Classes
-@inject Inventory.RazorLib.Services.UserStateService UserState
+@inject Inventory.SharedUI.Services.UserStateService UserState
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
@@ -46,6 +46,11 @@
             <div class="nav-item px-3">
                 <NavLink class="nav-link" href="notas">
                     <span class="bi bi-list-ul-nav-menu" aria-hidden="true"></span> Lista de Notas
+                </NavLink>
+            </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="facturacion">
+                    <span class="bi bi-receipt-nav-menu" aria-hidden="true"></span> Facturación POS
                 </NavLink>
             </div>
             <div class="nav-item px-3">
