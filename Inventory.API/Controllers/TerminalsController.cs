@@ -41,6 +41,18 @@ namespace Inventory.API.Controllers
             return CreatedAtAction(nameof(GetById), new { id = created!.Id }, created);
         }
 
+        [HttpGet("{id}/payment-methods")]
+        public async Task<IActionResult> GetPaymentMethods(int id)
+            => Ok(await _service.ListPaymentMethodsAsync(id));
+
+        [HttpPut("{id}/payment-methods")]
+        public async Task<IActionResult> SavePaymentMethods(int id, [FromBody] List<TerminalPaymentMethod> methods)
+        {
+            var result = await _service.SavePaymentMethodsAsync(id, methods ?? new());
+            if (!result.Success) return BadRequest(result.Error);
+            return NoContent();
+        }
+
         [HttpGet("{id}/ranges")]
         public async Task<IActionResult> GetRanges(int id, [FromQuery] InvoiceDocumentType? documentType)
         {

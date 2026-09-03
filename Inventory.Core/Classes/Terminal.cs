@@ -41,5 +41,6 @@ namespace Inventory.Core.Classes
         public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
 
         public List<InvoiceNumberRange> Ranges { get; set; } = new();
+        public List<TerminalPaymentMethod> PaymentMethods { get; set; } = new();
     }
 }

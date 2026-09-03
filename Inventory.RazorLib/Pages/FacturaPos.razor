@@ -1,8 +1,10 @@
 @page "/facturacion"
 @using Inventory.Core.Classes
+@using Inventory.SharedUI.Components
 @using Inventory.SharedUI.Services
 @inject InvoiceApiService InvoiceApi
 @inject ItemApiService ItemApi
+@inject CurrencyApiService CurrencyApi
 @inject UserStateService UserState
 
 <div class="container-fluid mt-4">
@@ -34,15 +36,25 @@
                     <div class="row g-3">
                         <div class="col-md-4">
                             <label class="form-label">Terminal</label>
-                            <input type="number" min="1" class="form-control" @bind="terminalId" />
+                            <select class="form-select" @bind="terminalId" @bind:after="OnTerminalChanged">
+                                <option value="0">Seleccione una caja</option>
+                                @foreach (var terminal in terminals)
+                                {
+                                    <option value="@terminal.Id">@terminal.Code - @terminal.Name</option>
+                                }
+                            </select>
+                            @if (terminals.Count == 0)
+                            {
+                                <small class="text-danger">No hay una caja configurada para esta cuenta.</small>
+                            }
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Cuenta comercial</label>
-                            <input type="number" min="1" class="form-control" @bind="customerAccountId" />
+                            <input class="form-control" value="@accountName" readonly />
                         </div>
                         <div class="col-md-4">
                             <label class="form-label">Usuario</label>
-                            <input type="number" min="1" class="form-control" @bind="createdByUserId" />
+                            <input class="form-control" value="@userName" readonly />
                         </div>
                         <div class="col-md-6">
                             <label class="form-label">Cliente</label>
@@ -51,6 +63,15 @@
                         <div class="col-md-6">
                             <label class="form-label">Documento</label>
                             <input class="form-control" @bind="customerDocument" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Modalidad fiscal</label>
+                            <select class="form-select" @bind="emissionMode">
+                                <option value="@InvoiceEmissionMode.FormaLibre">Forma libre</option>
+                                <option value="@InvoiceEmissionMode.Digital">Facturación digital</option>
+                                <option value="@InvoiceEmissionMode.MaquinaFiscal">Máquina fiscal</option>
+                            </select>
+                            <small class="text-muted">Digital y máquina fiscal requieren proveedor o equipo configurado.</small>
                         </div>
                     </div>
                 </div>
@@ -63,13 +84,22 @@
                         <input class="form-control" style="max-width: 22rem" placeholder="Buscar nombre, SKU o codigo" @bind="searchText" @bind:event="oninput" />
                     </div>
 
+                    <div class="input-group mb-3">
+                        <span class="input-group-text">Escanear</span>
+                        <input class="form-control" @bind="scanCode" @onkeydown="HandleScanKeyDown"
+                               placeholder="Codigo de barras y Enter" autocomplete="off" />
+                        <button class="btn btn-outline-primary" type="button" @onclick="ScanProduct">Agregar</button>
+                    </div>
+
+                    <BarcodeScanner OnScanned="AddScannedProduct" />
+
                     <div class="row g-2 mb-3">
                         @foreach (var item in FilteredItems.Take(12))
                         {
                             <div class="col-sm-6 col-lg-4">
                                 <button class="btn btn-outline-primary w-100 text-start h-100" @onclick="() => SelectItem(item)">
                                     <strong class="d-block">@item.Name</strong>
-                                    <small>@item.SKU - @item.PriceWithTax.ToString("N2")</small>
+                                    <small>@item.SKU - @PriceInBolivars(item, item.PriceWithTax).ToString("N2") Bs</small>
                                 </button>
                             </div>
                         }
@@ -81,14 +111,14 @@
                             <div class="row g-2 align-items-end">
                                 <div class="col-md-5">
                                     <strong>@selectedItem.Name</strong>
-                                    <div class="small text-muted">@selectedItem.SKU</div>
+                                    <div class="small text-muted">@selectedItem.SKU | Precio en Bs</div>
                                 </div>
                                 <div class="col-6 col-md-2">
                                     <label class="form-label">Cantidad</label>
                                     <input type="number" min="0.01" step="0.01" class="form-control" @bind="selectedQuantity" />
                                 </div>
                                 <div class="col-6 col-md-2">
-                                    <label class="form-label">Precio</label>
+                                    <label class="form-label">Precio (Bs)</label>
                                     <input type="number" min="0" step="0.01" class="form-control" @bind="selectedUnitPrice" />
                                 </div>
                                 <div class="col-md-3">
@@ -126,9 +156,9 @@
                                     @foreach (var line in invoiceLines)
                                     {
                                         <tr>
-                                            <td>@line.Description<br /><small class="text-muted">@line.UnitPrice.ToString("N2") + @line.TaxRate.ToString("N2")% IVA</small></td>
+                                            <td>@line.Description<br /><small class="text-muted">@line.UnitPrice.ToString("N2") Bs + @line.TaxRate.ToString("N2")% IVA</small></td>
                                             <td>@line.Quantity.ToString("N2")</td>
-                                            <td class="text-end">@line.Total.ToString("N2")</td>
+                                            <td class="text-end">@line.Total.ToString("N2") Bs</td>
                                             <td><button class="btn btn-sm btn-outline-danger" @onclick="() => RemoveLine(line)">X</button></td>
                                         </tr>
                                     }
@@ -138,36 +168,41 @@
                     }
 
                     <div class="border-top pt-3">
-                        <div class="d-flex justify-content-between"><span>Subtotal</span><strong>@subtotal.ToString("N2")</strong></div>
-                        <div class="d-flex justify-content-between"><span>IVA</span><strong>@taxTotal.ToString("N2")</strong></div>
-                        <div class="d-flex justify-content-between fs-4"><span>Total</span><strong>@grandTotal.ToString("N2")</strong></div>
+                        <div class="d-flex justify-content-between"><span>Subtotal (Bs)</span><strong>@subtotal.ToString("N2") Bs</strong></div>
+                        <div class="d-flex justify-content-between"><span>IVA (Bs)</span><strong>@taxTotal.ToString("N2") Bs</strong></div>
+                        <div class="d-flex justify-content-between fs-4"><span>Total (Bs)</span><strong>@grandTotal.ToString("N2") Bs</strong></div>
                     </div>
 
                     <div class="border-top mt-3 pt-3">
                         <h2 class="h6">Cobro</h2>
+                        @if (!exchangeRateReady)
+                        {
+                            <div class="alert alert-warning py-2">No se pudo obtener la tasa BCV. Los productos en USD no pueden cobrarse hasta actualizarla.</div>
+                        }
                         <div class="row g-2">
                             <div class="col-6">
                                 <label class="form-label">Metodo</label>
                                 <select class="form-select" @bind="paymentMethod">
-                                    <option>Efectivo</option>
-                                    <option>Tarjeta</option>
-                                    <option>Transferencia</option>
+                                    @foreach (var method in paymentMethods)
+                                    {
+                                        <option value="@method.Name">@method.Name</option>
+                                    }
                                 </select>
                             </div>
                             <div class="col-6">
-                                <label class="form-label">Recibido</label>
+                                <label class="form-label">Recibido (Bs)</label>
                                 <input type="number" min="0" step="0.01" class="form-control" @bind="amountReceived" />
                             </div>
                         </div>
                         <div class="d-grid mt-2" style="grid-template-columns: repeat(3, 1fr); gap: .5rem">
                             @foreach (var amount in keypadAmounts)
                             {
-                                <button class="btn btn-outline-secondary" @onclick="() => AddPaymentAmount(amount)">@amount.ToString("N0")</button>
+                                <button class="btn btn-outline-secondary" @onclick="() => AddPaymentAmount(amount)">@amount.ToString("N0") Bs</button>
                             }
                             <button class="btn btn-outline-secondary" @onclick="ClearPayment">Limpiar</button>
                         </div>
                         <div class="d-flex justify-content-between mt-3">
-                            <span>Cambio</span><strong>@change.ToString("N2")</strong>
+                            <span>Cambio (Bs)</span><strong>@change.ToString("N2") Bs</strong>
                         </div>
                     </div>
 
@@ -183,21 +218,30 @@
 </div>
 
 @code {
-    private int terminalId = 1;
-    private int customerAccountId = 1;
-    private int createdByUserId = 1;
+    private int terminalId;
+    private int customerAccountId;
+    private int createdByUserId;
+    private string accountName = string.Empty;
+    private string userName = string.Empty;
     private string customerName = "Cliente de contado";
     private string customerDocument = string.Empty;
+    private InvoiceEmissionMode emissionMode = InvoiceEmissionMode.FormaLibre;
     private string searchText = string.Empty;
+    private string scanCode = string.Empty;
     private string paymentMethod = "Efectivo";
+    private List<TerminalPaymentMethod> paymentMethods = DefaultPaymentMethods();
     private decimal selectedQuantity = 1m;
     private decimal selectedUnitPrice;
+    private decimal usdRate;
+    private int bolivarCurrencyId;
+    private bool exchangeRateReady;
     private decimal amountReceived;
     private bool isError;
     private bool showCloseout;
     private string statusMessage = string.Empty;
     private ItemUniversal? selectedItem;
     private List<ItemUniversal> items = new();
+    private List<Terminal> terminals = new();
     private List<InvoiceLine> invoiceLines = new();
     private int sessionInvoiceCount;
     private decimal sessionTotal;
@@ -210,7 +254,13 @@
         || (item.Barcode?.Contains(searchText, StringComparison.OrdinalIgnoreCase) ?? false));
 
     private bool CanAddLine => selectedItem != null && selectedQuantity > 0m && selectedUnitPrice >= 0m;
-    private bool CanSaveInvoice => invoiceLines.Count > 0 && terminalId > 0 && customerAccountId > 0 && createdByUserId > 0 && amountReceived >= grandTotal;
+    private bool CanSaveInvoice => invoiceLines.Count > 0
+        && terminalId > 0
+        && customerAccountId > 0
+        && createdByUserId > 0
+        && amountReceived >= grandTotal
+        && bolivarCurrencyId > 0
+        && !invoiceLines.Any(line => line.Item?.Currency?.Code.Equals("USD", StringComparison.OrdinalIgnoreCase) == true && usdRate <= 0m);
     private decimal subtotal => invoiceLines.Sum(line => line.Subtotal);
     private decimal taxTotal => invoiceLines.Sum(line => line.TaxAmount);
     private decimal grandTotal => invoiceLines.Sum(line => line.Total);
@@ -218,21 +268,116 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await CurrencyApi.RefreshExchangeRatesAsync();
+        var currencies = await CurrencyApi.GetCurrenciesAsync();
+        var bolivar = currencies.FirstOrDefault(currency =>
+            currency.Code.Equals("VES", StringComparison.OrdinalIgnoreCase)
+            || currency.Code.Equals("BS", StringComparison.OrdinalIgnoreCase)
+            || currency.Name.Contains("bolivar", StringComparison.OrdinalIgnoreCase));
+        var dollar = currencies.FirstOrDefault(currency => currency.Code.Equals("USD", StringComparison.OrdinalIgnoreCase));
+        bolivarCurrencyId = bolivar?.Id ?? 0;
+        usdRate = dollar?.ExchangeRate ?? 0m;
+        exchangeRateReady = bolivarCurrencyId > 0 && usdRate > 0m;
         items = await ItemApi.GetItemsAsync();
         var user = await UserState.GetCurrentUserAsync();
         if (user != null)
         {
             createdByUserId = user.UserId;
             customerAccountId = user.AccountId;
+            accountName = user.AccountName;
+            userName = $"{user.FullName} ({user.Email})";
+            terminals = (await InvoiceApi.GetTerminalsAsync(customerAccountId))
+                .Where(terminal => terminal.IsActive && terminal.StoreId.HasValue)
+                .ToList();
+            terminalId = terminals.FirstOrDefault()?.Id ?? 0;
+            await LoadPaymentMethods();
         }
     }
+
+    private async Task OnTerminalChanged()
+    {
+        await LoadPaymentMethods();
+    }
+
+    private async Task LoadPaymentMethods()
+    {
+        if (terminalId <= 0) return;
+
+        var configured = await InvoiceApi.GetPaymentMethodsAsync(terminalId);
+        paymentMethods = configured.Count > 0
+            ? configured.Where(method => method.IsActive).ToList()
+            : DefaultPaymentMethods();
+
+        if (paymentMethods.Count > 0 && !paymentMethods.Any(method => method.Name == paymentMethod))
+        {
+            paymentMethod = paymentMethods[0].Name;
+        }
+    }
+
+    private static List<TerminalPaymentMethod> DefaultPaymentMethods() => new()
+    {
+        new() { Code = "cash", Name = "Efectivo" },
+        new() { Code = "card", Name = "Tarjeta" },
+        new() { Code = "transfer", Name = "Transferencia" },
+        new() { Code = "mobile", Name = "Pago móvil" },
+        new() { Code = "credit", Name = "Crédito" }
+    };
 
     private void SelectItem(ItemUniversal item)
     {
         selectedItem = item;
         selectedQuantity = 1m;
-        selectedUnitPrice = item.Price;
+        selectedUnitPrice = PriceInBolivars(item, item.Price);
         statusMessage = string.Empty;
+    }
+
+    private async Task HandleScanKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key.Equals("Enter", StringComparison.OrdinalIgnoreCase))
+        {
+            await ScanProduct();
+        }
+    }
+
+    private Task ScanProduct()
+    {
+        var code = scanCode.Trim();
+        if (string.IsNullOrWhiteSpace(code)) return Task.CompletedTask;
+
+        var item = items.FirstOrDefault(candidate =>
+            string.Equals(candidate.Barcode?.Trim(), code, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(candidate.SKU.Trim(), code, StringComparison.OrdinalIgnoreCase));
+
+        if (item == null)
+        {
+            isError = true;
+            statusMessage = $"No se encontró un producto con código {code}.";
+            scanCode = string.Empty;
+            return Task.CompletedTask;
+        }
+
+        selectedItem = item;
+        selectedQuantity = 1m;
+        selectedUnitPrice = PriceInBolivars(item, item.Price);
+        AddLine();
+        scanCode = string.Empty;
+        return Task.CompletedTask;
+    }
+
+    private Task AddScannedProduct(string code)
+    {
+        scanCode = code;
+        return ScanProduct();
+    }
+
+    private decimal PriceInBolivars(ItemUniversal item, decimal amount)
+    {
+        if (item.Currency?.Code.Equals("USD", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            return amount * usdRate;
+        }
+
+        return amount;
     }
 
     private void AddLine()
@@ -308,7 +453,22 @@
                 line.UnitPrice,
                 line.TaxRate,
                 line.Discount,
-                line.Description)));
+                line.Description)),
+            emissionMode,
+            bolivarCurrencyId,
+            usdRate);
+
+        draft.Payments.Add(new InvoicePayment
+        {
+            TerminalId = terminalId,
+            MethodCode = paymentMethods.FirstOrDefault(method => method.Name == paymentMethod)?.Code ?? "cash",
+            MethodName = paymentMethod,
+            Amount = amountReceived,
+            CurrencyCode = "VES",
+            Status = PaymentStatus.Approved,
+            ProviderCode = "manual",
+            PaidAtUtc = DateTime.UtcNow
+        });
 
         var (success, created, error) = await InvoiceApi.CreateInvoiceAsync(draft);
         if (!success || created == null)

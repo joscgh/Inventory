@@ -27,6 +27,8 @@ namespace Inventory.API.Services
         Task<IEnumerable<Terminal>> ListAsync(int? customerAccountId = null);
         Task<Terminal?> FindByIdAsync(int id);
         Task<(Terminal? Terminal, string? Error)> CreateAsync(Terminal terminal);
+        Task<IEnumerable<TerminalPaymentMethod>> ListPaymentMethodsAsync(int terminalId);
+        Task<(bool Success, string? Error)> SavePaymentMethodsAsync(int terminalId, IEnumerable<TerminalPaymentMethod> methods);
         Task<IEnumerable<InvoiceNumberRange>> ListRangesAsync(int terminalId, InvoiceDocumentType? documentType = null);
         Task<(InvoiceNumberRange? Range, string? Error)> AssignRangeAsync(int terminalId, RangeAssignmentRequest request);
     }

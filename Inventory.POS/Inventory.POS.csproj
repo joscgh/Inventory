@@ -11,4 +11,9 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="8.0.30" PrivateAssets="all" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Inventory.RazorLib\Inventory.RazorLib.csproj" />
+    <ProjectReference Include="..\Inventory.SharedUI\Inventory.SharedUI.csproj" />
+  </ItemGroup>
+
 </Project>

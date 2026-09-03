@@ -16,6 +16,13 @@ namespace Inventory.Core.Classes
         Voided
     }
 
+    public enum InvoiceEmissionMode
+    {
+        FormaLibre,
+        Digital,
+        MaquinaFiscal
+    }
+
     /// <summary>
     /// Documento fiscal emitido. A diferencia de <see cref="Note"/>, una factura es
     /// inmutable: una vez emitida no se edita ni se reenumera. Para corregirla se
@@ -38,11 +45,16 @@ namespace Inventory.Core.Classes
 
         public InvoiceDocumentType DocumentType { get; set; } = InvoiceDocumentType.Factura;
         public InvoiceStatus Status { get; set; } = InvoiceStatus.Issued;
+        public InvoiceEmissionMode EmissionMode { get; set; } = InvoiceEmissionMode.FormaLibre;
 
         // --- Numeración fiscal ---
         public string Serie { get; set; } = string.Empty;
         public long Number { get; set; }
         public string ControlNumber { get; set; } = string.Empty;
+        public string? FiscalDocumentId { get; set; }
+        public string? FiscalDeviceSerial { get; set; }
+        public string? FiscalAuthorizationNumber { get; set; }
+        public string? FiscalDocumentHash { get; set; }
 
         public int TerminalId { get; set; }
         public Terminal? Terminal { get; set; }
@@ -95,6 +107,8 @@ namespace Inventory.Core.Classes
         public decimal Total { get; set; }
 
         public string Notes { get; set; } = string.Empty;
+
+        public List<InvoicePayment> Payments { get; set; } = new();
 
         // --- Anulación / referencia ---
         /// <summary>Factura que corrige este documento, cuando es nota de crédito o débito.</summary>

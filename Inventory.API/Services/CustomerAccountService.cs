@@ -1,5 +1,6 @@
 using Inventory.API.Repositories;
 using Inventory.Core.Classes;
+using Inventory.Core.Services;
 
 namespace Inventory.API.Services
 {
@@ -41,8 +42,16 @@ namespace Inventory.API.Services
 
         public async Task<bool> RegisterAccountAsync(CustomerAccount account)
         {
-            if (string.IsNullOrWhiteSpace(account.Name) || string.IsNullOrWhiteSpace(account.Email))
+            if (string.IsNullOrWhiteSpace(account.Name)
+                || string.IsNullOrWhiteSpace(account.Email)
+                || string.IsNullOrWhiteSpace(account.Address)
+                || !FiscalIdentifierValidator.IsValidRif(account.Document))
                 return false;
+
+            account.Document = FiscalIdentifierValidator.NormalizeRif(account.Document);
+            account.Name = account.Name.Trim();
+            account.Address = account.Address.Trim();
+            account.Email = account.Email.Trim();
 
             var existing = await _repository.GetByEmailAsync(account.Email);
             if (existing != null) return false;
@@ -55,6 +64,13 @@ namespace Inventory.API.Services
         {
             var existing = await _repository.GetByIdAsync(account.Id);
             if (existing == null) return false;
+
+            if (string.IsNullOrWhiteSpace(account.Name)
+                || string.IsNullOrWhiteSpace(account.Address)
+                || !FiscalIdentifierValidator.IsValidRif(account.Document))
+                return false;
+
+            account.Document = FiscalIdentifierValidator.NormalizeRif(account.Document);
 
             await _repository.UpdateAsync(account);
             return true;

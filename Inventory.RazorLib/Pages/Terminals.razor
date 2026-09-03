@@ -1,0 +1,246 @@
+@page "/terminals"
+@using Inventory.Core.Classes
+@using Inventory.Core.Enums
+@using Inventory.SharedUI.Services
+@inject InvoiceApiService InvoiceApi
+@inject CustomerAccountApiService AccountApi
+@inject UserStateService UserState
+
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>Cajas / Terminales</h2>
+            <p class="text-muted mb-0">Registra las cajas que emitirán facturas desde el POS.</p>
+        </div>
+        <a class="btn btn-outline-secondary" href="/inventory">Volver al inventario</a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Nueva caja</h5>
+                    <div class="mb-3">
+                        <label class="form-label">Cuenta comercial</label>
+                        <select class="form-select" value="@selectedAccountId" @onchange="OnAccountChanged">
+                            <option value="0">Seleccione una cuenta</option>
+                            @foreach (var account in accounts)
+                            {
+                                <option value="@account.Id">@account.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tienda emisora</label>
+                        <select class="form-select" @bind="form.StoreId">
+                            <option value="">Seleccione una tienda</option>
+                            @foreach (var store in stores)
+                            {
+                                <option value="@store.Id">@store.Name</option>
+                            }
+                        </select>
+                        <div class="form-text">La tienda debe tener dirección y RIF válido.</div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Código</label>
+                            <input class="form-control" @bind="form.Code" placeholder="CAJA1" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Serie fiscal</label>
+                            <input class="form-control" @bind="form.Serie" placeholder="A001" />
+                        </div>
+                    </div>
+                    <div class="mb-3 mt-3">
+                        <label class="form-label">Nombre</label>
+                        <input class="form-control" @bind="form.Name" placeholder="Caja principal" />
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Identificador del dispositivo</label>
+                        <input class="form-control" @bind="form.DeviceIdentifier" placeholder="POS-01" />
+                    </div>
+                    <button class="btn btn-primary" @onclick="CreateTerminal" disabled="@(selectedAccountId == 0)">Registrar caja</button>
+                    @if (!string.IsNullOrWhiteSpace(message))
+                    {
+                        <div class="alert @(isError ? "alert-danger" : "alert-success") mt-3 mb-0">@message</div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-7">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title">Cajas registradas</h5>
+                    @if (!terminals.Any())
+                    {
+                        <p class="text-muted mb-0">No hay cajas registradas para esta cuenta.</p>
+                    }
+                    else
+                    {
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle">
+                                <thead><tr><th>Código</th><th>Nombre</th><th>Serie</th><th>Tienda</th><th>Estado</th></tr></thead>
+                                <tbody>
+                                    @foreach (var terminal in terminals)
+                                    {
+                                        <tr>
+                                            <td><strong>@terminal.Code</strong></td>
+                                            <td>@terminal.Name</td>
+                                            <td>@terminal.Serie</td>
+                                            <td>@(terminal.Store?.Name ?? "-")</td>
+                                            <td><span class="badge @(terminal.IsActive ? "bg-success" : "bg-secondary")">@(terminal.IsActive ? "Activa" : "Inactiva")</span></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="border-top mt-3 pt-3">
+                            <h6>Métodos de pago de la caja</h6>
+                            <select class="form-select mb-3" value="@selectedTerminalId" @onchange="OnTerminalChanged">
+                                <option value="0">Seleccione una caja</option>
+                                @foreach (var terminal in terminals)
+                                {
+                                    <option value="@terminal.Id">@terminal.Code - @terminal.Name</option>
+                                }
+                            </select>
+                            @if (selectedTerminalId > 0)
+                            {
+                                @foreach (var option in paymentOptions)
+                                {
+                                    <label class="form-check mb-2">
+                                        <input class="form-check-input" type="checkbox" @bind="option.IsActive" />
+                                        <span class="form-check-label">@option.Name</span>
+                                    </label>
+                                }
+                                <button class="btn btn-outline-primary" @onclick="SavePaymentMethods">Guardar métodos de pago</button>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<CustomerAccount> accounts = new();
+    private List<AccountLocation> stores = new();
+    private List<Terminal> terminals = new();
+    private Terminal form = new() { IsActive = true };
+    private int selectedAccountId;
+    private string message = string.Empty;
+    private bool isError;
+    private int selectedTerminalId;
+    private List<PaymentOption> paymentOptions = CreatePaymentOptions();
+
+    private static List<PaymentOption> CreatePaymentOptions() => new()
+    {
+        new("cash", "Efectivo"),
+        new("card", "Tarjeta"),
+        new("transfer", "Transferencia"),
+        new("mobile", "Pago móvil"),
+        new("credit", "Crédito")
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        accounts = await AccountApi.GetAccountsAsync();
+
+        var currentUser = await UserState.GetCurrentUserAsync();
+        if (currentUser != null && accounts.Any(account => account.Id == currentUser.AccountId))
+        {
+            selectedAccountId = currentUser.AccountId;
+            await LoadAccountData();
+        }
+    }
+
+    private async Task OnAccountChanged(ChangeEventArgs args)
+    {
+        selectedAccountId = int.TryParse(args.Value?.ToString(), out var id) ? id : 0;
+        await LoadAccountData();
+        form = new Terminal { CustomerAccountId = selectedAccountId, IsActive = true };
+        message = string.Empty;
+    }
+
+    private async Task LoadAccountData()
+    {
+        stores = selectedAccountId == 0
+            ? new()
+            : (await AccountApi.GetLocationsAsync(selectedAccountId))
+                .Where(location => location.Type == LocationType.Store)
+                .ToList();
+        terminals = selectedAccountId == 0
+            ? new()
+            : await InvoiceApi.GetTerminalsAsync(selectedAccountId);
+        selectedTerminalId = 0;
+        paymentOptions = CreatePaymentOptions();
+    }
+
+    private async Task CreateTerminal()
+    {
+        message = string.Empty;
+        form.CustomerAccountId = selectedAccountId;
+        if (string.IsNullOrWhiteSpace(form.Code) || string.IsNullOrWhiteSpace(form.Name))
+        {
+            isError = true;
+            message = "El código y el nombre son obligatorios.";
+            return;
+        }
+
+        var result = await InvoiceApi.CreateTerminalAsync(form);
+        if (!result.Success)
+        {
+            isError = true;
+            message = result.ErrorMessage ?? "No se pudo registrar la caja.";
+            return;
+        }
+
+        isError = false;
+        message = "Caja registrada correctamente.";
+        terminals = await InvoiceApi.GetTerminalsAsync(selectedAccountId);
+        form = new Terminal { CustomerAccountId = selectedAccountId, IsActive = true };
+    }
+
+    private async Task OnTerminalChanged(ChangeEventArgs args)
+    {
+        selectedTerminalId = int.TryParse(args.Value?.ToString(), out var id) ? id : 0;
+        paymentOptions = CreatePaymentOptions();
+        if (selectedTerminalId == 0) return;
+
+        var configured = await InvoiceApi.GetPaymentMethodsAsync(selectedTerminalId);
+        foreach (var option in paymentOptions)
+        {
+            option.IsActive = configured.Any(method =>
+                method.Code.Equals(option.Code, StringComparison.OrdinalIgnoreCase) && method.IsActive);
+        }
+    }
+
+    private async Task SavePaymentMethods()
+    {
+        var result = await InvoiceApi.SavePaymentMethodsAsync(
+            selectedTerminalId,
+            paymentOptions.Select(option => new TerminalPaymentMethod
+            {
+                Code = option.Code,
+                Name = option.Name,
+                IsActive = option.IsActive
+            }));
+        isError = !result.Success;
+        message = result.Success ? "Métodos de pago guardados." : result.ErrorMessage ?? "No se pudieron guardar los métodos de pago.";
+    }
+
+    private sealed class PaymentOption
+    {
+        public PaymentOption(string code, string name)
+        {
+            Code = code;
+            Name = name;
+        }
+
+        public string Code { get; }
+        public string Name { get; }
+        public bool IsActive { get; set; }
+    }
+}

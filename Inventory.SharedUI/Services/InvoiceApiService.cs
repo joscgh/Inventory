@@ -19,7 +19,10 @@ namespace Inventory.SharedUI.Services
             int createdByUserId,
             string customerName,
             string customerDocument,
-            IEnumerable<InvoiceLineDraft> lineDrafts)
+            IEnumerable<InvoiceLineDraft> lineDrafts,
+            InvoiceEmissionMode emissionMode = InvoiceEmissionMode.FormaLibre,
+            int? invoiceCurrencyId = null,
+            decimal? exchangeRate = null)
         {
             var invoice = new Invoice
             {
@@ -31,7 +34,10 @@ namespace Inventory.SharedUI.Services
                 CustomerDocument = customerDocument,
                 IssuedAt = DateTime.Now,
                 Status = InvoiceStatus.Issued,
-                DocumentType = InvoiceDocumentType.Factura
+                DocumentType = InvoiceDocumentType.Factura,
+                EmissionMode = emissionMode,
+                CurrencyId = invoiceCurrencyId,
+                ExchangeRate = exchangeRate
             };
 
             foreach (var draft in lineDrafts)
@@ -46,8 +52,8 @@ namespace Inventory.SharedUI.Services
                     Quantity = draft.Quantity,
                     UnitPrice = draft.UnitPrice,
                     TaxRate = draft.TaxRate,
-                    CurrencyId = item.CurrencyId,
-                    ExchangeRate = 1m,
+                    CurrencyId = invoiceCurrencyId ?? item.CurrencyId,
+                    ExchangeRate = exchangeRate ?? 1m,
                     CategoryId = item.CategoryId,
                     Discount = draft.Discount
                 };
@@ -72,6 +78,29 @@ namespace Inventory.SharedUI.Services
         {
             var url = customerAccountId.HasValue ? $"api/terminals?customerAccountId={customerAccountId.Value}" : "api/terminals";
             return await _http.GetFromJsonAsync<List<Terminal>>(url) ?? new();
+        }
+
+        public async Task<(bool Success, Terminal? Terminal, string? ErrorMessage)> CreateTerminalAsync(Terminal terminal)
+        {
+            var response = await _http.PostAsJsonAsync("api/terminals", terminal);
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorText = await response.Content.ReadAsStringAsync();
+                return (false, null, string.IsNullOrWhiteSpace(errorText) ? response.ReasonPhrase : errorText);
+            }
+
+            return (true, await response.Content.ReadFromJsonAsync<Terminal>(), null);
+        }
+
+        public async Task<List<TerminalPaymentMethod>> GetPaymentMethodsAsync(int terminalId) =>
+            await _http.GetFromJsonAsync<List<TerminalPaymentMethod>>($"api/terminals/{terminalId}/payment-methods") ?? new();
+
+        public async Task<(bool Success, string? ErrorMessage)> SavePaymentMethodsAsync(int terminalId, IEnumerable<TerminalPaymentMethod> methods)
+        {
+            var response = await _http.PutAsJsonAsync($"api/terminals/{terminalId}/payment-methods", methods);
+            if (response.IsSuccessStatusCode) return (true, null);
+            var errorText = await response.Content.ReadAsStringAsync();
+            return (false, string.IsNullOrWhiteSpace(errorText) ? response.ReasonPhrase : errorText);
         }
 
         public async Task<List<Invoice>> GetInvoicesAsync(

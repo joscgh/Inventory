@@ -1,5 +1,6 @@
 using Inventory.API.Repositories;
 using Inventory.Core.Classes;
+using Inventory.Core.Services;
 
 namespace Inventory.API.Services
 {
@@ -42,6 +43,27 @@ namespace Inventory.API.Services
                 return InvoiceRegistrationResult.Fail("La factura debe registrar el usuario que la emitió.");
             }
 
+            if (string.IsNullOrWhiteSpace(invoice.CustomerName))
+            {
+                return InvoiceRegistrationResult.Fail("La factura debe identificar al cliente.");
+            }
+
+            if (invoice.Lines.Any(line => line.Quantity <= 0m
+                || line.UnitPrice < 0m
+                || line.Discount < 0m
+                || line.Discount > line.UnitPrice * line.Quantity
+                || line.TaxRate < 0m
+                || line.TaxRate > 100m))
+            {
+                return InvoiceRegistrationResult.Fail("La factura contiene una cantidad, descuento, precio o impuesto inválido.");
+            }
+
+            var emissionError = ValidateEmissionMode(invoice);
+            if (emissionError != null)
+            {
+                return InvoiceRegistrationResult.Fail(emissionError);
+            }
+
             // Reintento de una factura que ya subió: se devuelve la que está guardada,
             // sin tocar la numeración. El POS puede reenviar sin miedo.
             var existing = await _repository.GetByClientGuidAsync(invoice.ClientGuid);
@@ -56,9 +78,34 @@ namespace Inventory.API.Services
                 return InvoiceRegistrationResult.Fail("La caja indicada no existe.");
             }
 
+            if (invoice.CustomerAccountId > 0 && invoice.CustomerAccountId != terminal.CustomerAccountId)
+            {
+                return InvoiceRegistrationResult.Fail("La caja seleccionada no pertenece a la cuenta del usuario.");
+            }
+
             if (!terminal.IsActive)
             {
                 return InvoiceRegistrationResult.Fail($"La caja {terminal.Code} está desactivada y no puede facturar.");
+            }
+
+            if (terminal.Store == null
+                || string.IsNullOrWhiteSpace(terminal.Store.Address)
+                || !FiscalIdentifierValidator.IsValidRif(terminal.Store.Rif))
+            {
+                return InvoiceRegistrationResult.Fail(
+                    "La caja debe tener una tienda emisora configurada con dirección y RIF válido.");
+            }
+
+            if (terminal.Account == null
+                || !FiscalIdentifierValidator.IsValidRif(terminal.Account.Document)
+                || terminal.Store.CustomerAccountId != terminal.CustomerAccountId
+                || !string.Equals(
+                    FiscalIdentifierValidator.NormalizeRif(terminal.Account.Document),
+                    FiscalIdentifierValidator.NormalizeRif(terminal.Store.Rif),
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return InvoiceRegistrationResult.Fail(
+                    "La tienda emisora debe pertenecer al mismo contribuyente que la cuenta de la caja.");
             }
 
             if (invoice.CustomerAccountId <= 0)
@@ -70,6 +117,12 @@ namespace Inventory.API.Services
             invoice.Serie = string.IsNullOrWhiteSpace(invoice.Serie) ? terminal.Serie : invoice.Serie;
 
             ApplyTotals(invoice);
+
+            var paymentError = ValidatePayments(invoice, terminal);
+            if (paymentError != null)
+            {
+                return InvoiceRegistrationResult.Fail(paymentError);
+            }
 
             try
             {
@@ -84,6 +137,43 @@ namespace Inventory.API.Services
         }
 
         public Task<Invoice?> VoidAsync(int id, string reason) => _repository.VoidAsync(id, reason);
+
+        private static string? ValidateEmissionMode(Invoice invoice)
+        {
+            return invoice.EmissionMode switch
+            {
+                InvoiceEmissionMode.Digital when string.IsNullOrWhiteSpace(invoice.FiscalDocumentId)
+                    => "La facturación digital requiere el identificador emitido por un proveedor autorizado.",
+                InvoiceEmissionMode.MaquinaFiscal when string.IsNullOrWhiteSpace(invoice.FiscalDeviceSerial)
+                    => "La máquina fiscal requiere el serial del equipo autorizado.",
+                InvoiceEmissionMode.MaquinaFiscal when string.IsNullOrWhiteSpace(invoice.FiscalDocumentId)
+                    => "La máquina fiscal requiere el número devuelto por el equipo fiscal.",
+                _ => null
+            };
+        }
+
+        private static string? ValidatePayments(Invoice invoice, Terminal terminal)
+        {
+            if (invoice.Payments == null || invoice.Payments.Count == 0)
+            {
+                return "La factura debe registrar al menos un método de pago.";
+            }
+
+            if (invoice.Payments.Any(payment => payment.TerminalId != terminal.Id
+                || payment.Amount <= 0m
+                || payment.Status != PaymentStatus.Approved
+                || !string.Equals(payment.CurrencyCode, "VES", StringComparison.OrdinalIgnoreCase)))
+            {
+                return "El pago debe estar aprobado, expresado en VES y asociado a la caja seleccionada.";
+            }
+
+            if (invoice.Payments.Sum(payment => payment.Amount) < invoice.Total)
+            {
+                return "Los pagos registrados no cubren el total de la factura.";
+            }
+
+            return null;
+        }
 
         /// <summary>
         /// Los importes se recalculan en el servidor a partir de las líneas: lo que

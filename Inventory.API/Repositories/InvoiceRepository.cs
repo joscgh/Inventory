@@ -24,7 +24,8 @@ namespace Inventory.API.Repositories
                 .Include(i => i.Currency)
                 .Include(i => i.ReferenceInvoice)
                 .Include(i => i.Lines)
-                    .ThenInclude(l => l.Currency);
+                    .ThenInclude(l => l.Currency)
+                .Include(i => i.Payments);
 
         public async Task<IEnumerable<Invoice>> GetAllAsync(
             InvoiceDocumentType? documentType = null,
@@ -183,6 +184,12 @@ namespace Inventory.API.Repositories
             invoice.Currency = null;
             invoice.ReferenceInvoice = null;
             invoice.ReferencedByInvoices.Clear();
+
+            foreach (var payment in invoice.Payments)
+            {
+                payment.Invoice = null;
+                payment.Terminal = null;
+            }
 
             foreach (var line in invoice.Lines)
             {

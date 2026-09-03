@@ -1,4 +1,5 @@
 ﻿using Inventory.SharedUI;
+using Microsoft.AspNetCore.Components.WebView.Maui;
 using Microsoft.Extensions.Logging;
 
 namespace Inventory.POS.Native;
@@ -14,6 +15,13 @@ public static class MauiProgram
 			{
 				fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
 			});
+
+#if ANDROID
+		builder.ConfigureMauiHandlers(handlers =>
+		{
+			handlers.AddHandler<BlazorWebView, global::Inventory.Native.CustomBlazorWebViewHandler>();
+		});
+#endif
 
 		var apiBaseUrl = GetApiBaseUrl();
 

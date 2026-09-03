@@ -7,6 +7,10 @@ namespace Inventory.API.Repositories
         Task<IEnumerable<Terminal>> GetAllAsync(int? customerAccountId = null);
         Task<Terminal?> GetByIdAsync(int id);
         Task AddAsync(Terminal terminal);
+        Task<CustomerAccount?> GetAccountAsync(int id);
+        Task<AccountLocation?> GetStoreAsync(int id);
+        Task<IEnumerable<TerminalPaymentMethod>> GetPaymentMethodsAsync(int terminalId);
+        Task SavePaymentMethodsAsync(int terminalId, IEnumerable<TerminalPaymentMethod> methods);
 
         Task<IEnumerable<InvoiceNumberRange>> GetRangesAsync(int terminalId, InvoiceDocumentType? documentType = null);
 

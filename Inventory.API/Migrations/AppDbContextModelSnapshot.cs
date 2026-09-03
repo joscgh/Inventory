@@ -358,8 +358,23 @@ namespace Inventory.API.Migrations
                     b.Property<int>("DocumentType")
                         .HasColumnType("integer");
 
+                    b.Property<int>("EmissionMode")
+                        .HasColumnType("integer");
+
                     b.Property<decimal?>("ExchangeRate")
                         .HasColumnType("numeric");
+
+                    b.Property<string>("FiscalAuthorizationNumber")
+                        .HasColumnType("text");
+
+                    b.Property<string>("FiscalDeviceSerial")
+                        .HasColumnType("text");
+
+                    b.Property<string>("FiscalDocumentHash")
+                        .HasColumnType("text");
+
+                    b.Property<string>("FiscalDocumentId")
+                        .HasColumnType("text");
 
                     b.Property<int?>("InvoiceNumberRangeId")
                         .HasColumnType("integer");

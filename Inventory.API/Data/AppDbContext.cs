@@ -30,6 +30,8 @@ namespace Inventory.API.Data
         public DbSet<Inventory.Core.Classes.InvoiceNumberRange> InvoiceNumberRanges { get; set; }
         public DbSet<Inventory.Core.Classes.Invoice> Invoices { get; set; }
         public DbSet<Inventory.Core.Classes.InvoiceLine> InvoiceLines { get; set; }
+        public DbSet<Inventory.Core.Classes.InvoicePayment> InvoicePayments { get; set; }
+        public DbSet<Inventory.Core.Classes.TerminalPaymentMethod> TerminalPaymentMethods { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -278,6 +280,19 @@ namespace Inventory.API.Data
                 .HasForeignKey(t => t.StoreId)
                 .OnDelete(DeleteBehavior.Restrict);
 
+            modelBuilder.Entity<Inventory.Core.Classes.TerminalPaymentMethod>()
+                .HasKey(p => p.Id);
+
+            modelBuilder.Entity<Inventory.Core.Classes.TerminalPaymentMethod>()
+                .HasIndex(p => new { p.TerminalId, p.Code })
+                .IsUnique();
+
+            modelBuilder.Entity<Inventory.Core.Classes.TerminalPaymentMethod>()
+                .HasOne(p => p.Terminal)
+                .WithMany(t => t.PaymentMethods)
+                .HasForeignKey(p => p.TerminalId)
+                .OnDelete(DeleteBehavior.Cascade);
+
             modelBuilder.Entity<Inventory.Core.Classes.InvoiceNumberRange>()
                 .HasKey(r => r.Id);
 
@@ -386,6 +401,21 @@ namespace Inventory.API.Data
                 .HasOne(l => l.Currency)
                 .WithMany()
                 .HasForeignKey(l => l.CurrencyId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Inventory.Core.Classes.InvoicePayment>()
+                .HasKey(p => p.Id);
+
+            modelBuilder.Entity<Inventory.Core.Classes.InvoicePayment>()
+                .HasOne(p => p.Invoice)
+                .WithMany(i => i.Payments)
+                .HasForeignKey(p => p.InvoiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Inventory.Core.Classes.InvoicePayment>()
+                .HasOne(p => p.Terminal)
+                .WithMany()
+                .HasForeignKey(p => p.TerminalId)
                 .OnDelete(DeleteBehavior.Restrict);
         }
     }

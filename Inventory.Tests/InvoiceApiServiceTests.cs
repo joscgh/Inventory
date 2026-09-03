@@ -36,6 +36,7 @@ public class InvoiceApiServiceTests
         Assert.Equal(8, invoice.CustomerAccountId);
         Assert.Equal(10, invoice.CreatedByUserId);
         Assert.NotEqual(Guid.Empty, invoice.ClientGuid);
+        Assert.Equal(InvoiceEmissionMode.FormaLibre, invoice.EmissionMode);
         Assert.Single(invoice.Lines);
         Assert.Equal(200m, invoice.Lines[0].Subtotal);
         Assert.Equal(32m, invoice.Lines[0].TaxAmount);

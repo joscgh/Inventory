@@ -21,10 +21,10 @@
         <Nullable>enable</Nullable>
 
         <!-- Display name -->
-        <ApplicationTitle>Inventory.POS.Native</ApplicationTitle>
+        <ApplicationTitle>POS Facturacion</ApplicationTitle>
 
         <!-- App Identifier -->
-        <ApplicationId>com.companyname.inventory.posapp</ApplicationId>
+        <ApplicationId>com.bigwise.posfacturacion</ApplicationId>
 
         <!-- Versions -->
         <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
