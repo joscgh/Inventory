@@ -76,18 +76,25 @@ Inventory.API/obj/
 Inventory.API/.build-validation-api/
 Inventory.APP/bin/
 Inventory.APP/obj/
+Inventory.APP/.build-validation-api/
 Inventory.Core/bin/
 Inventory.Core/obj/
+Inventory.Core/.build-validation-api/
 Inventory.RazorLib/bin/
 Inventory.RazorLib/obj/
+Inventory.RazorLib/.build-validation-api/
 Inventory.POS/bin/
 Inventory.POS/obj/
+Inventory.POS/.build-validation-api/
 Inventory.POS.Native/bin/
 Inventory.POS.Native/obj/
+Inventory.POS.Native/.build-validation-api/
 Inventory.Native/bin/
 Inventory.Native/obj/
+Inventory.Native/.build-validation-api/
 Inventory.SharedUI/bin/
 Inventory.SharedUI/obj/
+Inventory.SharedUI/.build-validation-api/
 
 
 # Ignore JetBrains Rider caches
