@@ -79,6 +79,15 @@ Inventory.Core/bin/
 Inventory.Core/obj/
 Inventory.RazorLib/bin/
 Inventory.RazorLib/obj/
+Inventory.POS/bin/
+Inventory.POS/obj/
+Inventory.POS.Native/bin/
+Inventory.POS.Native/obj/
+Inventory.Native/bin/
+Inventory.Native/obj/
+Inventory.SharedUI/bin/
+Inventory.SharedUI/obj/
+
 
 # Ignore JetBrains Rider caches
 .idea/
