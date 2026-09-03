@@ -1,0 +1,121 @@
+@page "/servidor"
+@inject HttpClient Http
+
+<PageTitle>Servidor</PageTitle>
+
+<div class="container mt-4">
+    <h1>Servidor</h1>
+    <p class="text-muted">Dirección de la API a la que se conecta esta app.</p>
+
+    <div class="mb-3">
+        <label class="form-label">URL del servidor</label>
+        <input class="form-control" @bind="url" @bind:event="oninput" placeholder="http://192.168.1.100:5130" />
+        <div class="form-text">Debe ser la IP del PC donde corre Inventory.API, en la misma red WiFi.</div>
+    </div>
+
+    <div class="d-flex gap-2 flex-wrap">
+        <button class="btn btn-primary" @onclick="Save" disabled="@busy">Guardar</button>
+        <button class="btn btn-outline-secondary" @onclick="TestAsync" disabled="@busy">Probar conexión</button>
+        <button class="btn btn-outline-danger" @onclick="Reset" disabled="@busy">Restablecer</button>
+    </div>
+
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="alert @(isError ? "alert-danger" : "alert-success") mt-3">@message</div>
+    }
+
+    <hr />
+    <p class="text-muted mb-0"><small>En uso ahora: @Http.BaseAddress</small></p>
+</div>
+
+@code {
+    private string url = string.Empty;
+    private string? message;
+    private bool isError;
+    private bool busy;
+
+    protected override void OnInitialized()
+    {
+        var stored = Preferences.Default.Get(MauiProgram.ApiBaseUrlPreferenceKey, string.Empty);
+        url = string.IsNullOrWhiteSpace(stored) ? Http.BaseAddress?.ToString() ?? MauiProgram.LanApiBaseUrl : stored;
+    }
+
+    private bool TryNormalize(out string normalized)
+    {
+        normalized = string.Empty;
+        var candidate = url?.Trim() ?? string.Empty;
+        if (candidate.Length == 0)
+        {
+            return false;
+        }
+
+        if (!candidate.StartsWith("http://", StringComparison.OrdinalIgnoreCase)
+            && !candidate.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        {
+            candidate = "http://" + candidate;
+        }
+
+        if (!Uri.TryCreate(candidate, UriKind.Absolute, out _))
+        {
+            return false;
+        }
+
+        normalized = candidate.TrimEnd('/');
+        return true;
+    }
+
+    private void Save()
+    {
+        if (!TryNormalize(out var normalized))
+        {
+            Show("La dirección no es válida.", true);
+            return;
+        }
+
+        Preferences.Default.Set(MauiProgram.ApiBaseUrlPreferenceKey, normalized);
+        url = normalized;
+        Show("Guardado. Cierra la app por completo y vuelve a abrirla para aplicar el cambio.", false);
+    }
+
+    private async Task TestAsync()
+    {
+        if (!TryNormalize(out var normalized))
+        {
+            Show("La dirección no es válida.", true);
+            return;
+        }
+
+        busy = true;
+        message = null;
+
+        try
+        {
+            using var client = new HttpClient(MauiProgram.CreateHandler()) { Timeout = TimeSpan.FromSeconds(8) };
+            using var response = await client.GetAsync($"{normalized}/api/currencies");
+            Show(response.IsSuccessStatusCode
+                ? "Conexión correcta con el servidor."
+                : $"El servidor respondió {(int)response.StatusCode}.", !response.IsSuccessStatusCode);
+        }
+        catch (Exception ex)
+        {
+            Show($"No se pudo conectar: {ex.Message}", true);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void Reset()
+    {
+        Preferences.Default.Remove(MauiProgram.ApiBaseUrlPreferenceKey);
+        url = MauiProgram.LanApiBaseUrl;
+        Show("Se restableció la dirección por defecto. Reinicia la app.", false);
+    }
+
+    private void Show(string text, bool error)
+    {
+        message = text;
+        isError = error;
+    }
+}

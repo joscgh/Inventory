@@ -1,0 +1,354 @@
+@page "/reports/sales"
+@using Inventory.Core.Classes
+@inject Inventory.SharedUI.Services.AdjustmentApiService AdjustmentService
+@inject Inventory.SharedUI.Services.CategoryApiService CategoryService
+@inject Inventory.SharedUI.Services.CurrencyApiService CurrencyService
+
+<div class="container-fluid mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2>📈 Reportes de ventas</h2>
+            <p class="text-muted mb-0">Filtra por rango de fechas, categoría, y revisa los productos más y menos vendidos.</p>
+        </div>
+        <a class="btn btn-secondary" href="/inventory">← Volver al inventario</a>
+    </div>
+
+    @if (!loaded)
+    {
+        <div class="alert alert-info">Cargando datos de ventas...</div>
+    }
+    else
+    {
+        <div class="card mb-4">
+            <div class="card-body">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-2">
+                        <label class="form-label">Fecha inicio</label>
+                        <input type="date" class="form-control" @bind="startDate" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Fecha fin</label>
+                        <input type="date" class="form-control" @bind="endDate" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Categoría</label>
+                        <select class="form-select" @bind="selectedCategoryId">
+                            <option value="0">Todas las categorías</option>
+                            @foreach (var category in categories)
+                            {
+                                <option value="@category.Id">@category.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Moneda</label>
+                        <select class="form-select" @bind="selectedCurrencyId">
+                            @if (!currencies.Any())
+                            {
+                                <option value="0">Sin monedas</option>
+                            }
+                            @foreach (var currency in currencies)
+                            {
+                                <option value="@currency.Id">@currency.Symbol @currency.Code</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2 text-end">
+                        <button class="btn btn-primary w-100" @onclick="ResetFilters">Limpiar</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h5>Total de ventas</h5>
+                        <p class="display-6 mb-1">@TotalSoldQuantity.ToString("N2")</p>
+                        <p class="text-muted mb-0">unidades vendidas</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h5>Valor total</h5>
+                        <p class="display-6 mb-1">@FormatMoney(TotalSalesValue)</p>
+                        <p class="text-muted mb-0">valor estimado de las ventas</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h5>Registros</h5>
+                        <p class="display-6 mb-1">@FilteredSales.Count()</p>
+                        <p class="text-muted mb-0">movimientos de venta</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h5>Top más vendidos</h5>
+                        @if (!TopMostSold.Any())
+                        {
+                            <div class="alert alert-light">No hay ventas en el rango seleccionado.</div>
+                        }
+                        else
+                        {
+                            <table class="table table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Producto</th>
+                                        <th class="text-end">Cantidad</th>
+                                        <th class="text-end">Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in TopMostSold)
+                                    {
+                                        <tr>
+                                            <td>@item.SKU</td>
+                                            <td>@item.Name</td>
+                                            <td class="text-end">@item.Quantity.ToString("N2")</td>
+                                            <td class="text-end">@FormatMoney(item.Value)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card shadow-sm h-100">
+                    <div class="card-body">
+                        <h5>Top menos vendidos</h5>
+                        @if (!TopLeastSold.Any())
+                        {
+                            <div class="alert alert-light">No hay ventas en el rango seleccionado.</div>
+                        }
+                        else
+                        {
+                            <table class="table table-sm mb-0">
+                                <thead>
+                                    <tr>
+                                        <th>SKU</th>
+                                        <th>Producto</th>
+                                        <th class="text-end">Cantidad</th>
+                                        <th class="text-end">Valor</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in TopLeastSold)
+                                    {
+                                        <tr>
+                                            <td>@item.SKU</td>
+                                            <td>@item.Name</td>
+                                            <td class="text-end">@item.Quantity.ToString("N2")</td>
+                                            <td class="text-end">@FormatMoney(item.Value)</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm mt-4">
+            <div class="card-body">
+                <h5>Ventas por categoría</h5>
+                @if (!SalesByCategory.Any())
+                {
+                    <div class="alert alert-light">No hay ventas para mostrar por categoría.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-sm mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Categoría</th>
+                                    <th class="text-end">Cantidad</th>
+                                    <th class="text-end">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var category in SalesByCategory)
+                                {
+                                    <tr>
+                                        <td>@category.Name</td>
+                                        <td class="text-end">@category.Quantity.ToString("N2")</td>
+                                        <td class="text-end">@FormatMoney(category.Value)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+
+        <div class="card shadow-sm mt-4">
+            <div class="card-body">
+                <h5>Detalle de ventas</h5>
+                @if (!FilteredSales.Any())
+                {
+                    <div class="alert alert-light">No hay movimientos en el periodo seleccionado.</div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm mb-0 align-middle">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Fecha</th>
+                                    <th>SKU</th>
+                                    <th>Producto</th>
+                                    <th>Categoría</th>
+                                    <th class="text-end">Cantidad</th>
+                                    <th class="text-end">Valor</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var sale in FilteredSales)
+                                {
+                                    <tr>
+                                        <td>@sale.Timestamp.ToLocalTime().ToString("g")</td>
+                                        <td>@sale.SKU</td>
+                                        <td>@(sale.Item?.Name ?? "-")</td>
+                                        <td>@(sale.Item?.Category?.Name ?? "Sin categoría")</td>
+                                        <td class="text-end">@Math.Abs(sale.Change).ToString("N2")</td>
+                                        <td class="text-end">@(sale.Item != null ? FormatMoney(SaleValue(sale)) : "-")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private List<InventoryAdjustment> adjustments = new();
+    private List<Category> categories = new();
+    private List<Currency> currencies = new();
+    private DateTime startDate = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime endDate = DateTime.Today;
+    private int selectedCategoryId = 0;
+    private int selectedCurrencyId = 0;
+    private bool loaded;
+
+    protected override async Task OnInitializedAsync()
+    {
+        adjustments = await AdjustmentService.GetAllAdjustmentsAsync();
+        categories = await CategoryService.GetCategoriesAsync();
+        currencies = await CurrencyService.GetCurrenciesAsync();
+        selectedCurrencyId = currencies.FirstOrDefault(c => c.Code == "USD")?.Id
+            ?? currencies.FirstOrDefault()?.Id
+            ?? 0;
+        loaded = true;
+    }
+
+    private Currency? SelectedCurrency => currencies.FirstOrDefault(c => c.Id == selectedCurrencyId);
+
+    // Convierte un valor desde la moneda del producto a la moneda seleccionada usando las tasas de cambio.
+    // Las tasas representan unidades de la moneda base (Bs) por cada unidad de la moneda extranjera.
+    private decimal ConvertValue(decimal amount, Currency? from)
+    {
+        var to = SelectedCurrency;
+        if (to == null || from == null || from.Id == to.Id) return amount;
+
+        var fromRate = from.ExchangeRate ?? 1m;
+        var toRate = to.ExchangeRate ?? 1m;
+        if (fromRate <= 0 || toRate <= 0) return amount;
+
+        return amount * fromRate / toRate;
+    }
+
+    private decimal SaleValue(InventoryAdjustment a) =>
+        a.Item != null ? ConvertValue((decimal)Math.Abs(a.Change) * a.Item.PriceWithTax, a.Item.Currency) : 0m;
+
+    private string FormatMoney(decimal value)
+    {
+        var symbol = SelectedCurrency?.Symbol;
+        return string.IsNullOrEmpty(symbol)
+            ? value.ToString("C2")
+            : $"{symbol}{value.ToString("N2")}";
+    }
+
+    private void ResetFilters()
+    {
+        startDate = new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1);
+        endDate = DateTime.Today;
+        selectedCategoryId = 0;
+    }
+
+    private IEnumerable<InventoryAdjustment> FilteredSales => adjustments
+        .Where(a => a.Change < 0)
+        .Where(a => a.Timestamp.ToLocalTime().Date >= startDate && a.Timestamp.ToLocalTime().Date <= endDate)
+        .Where(a => selectedCategoryId == 0 || a.Item?.CategoryId == selectedCategoryId)
+        .OrderByDescending(a => a.Timestamp);
+
+    private decimal TotalSoldQuantity => (decimal)FilteredSales.Sum(a => Math.Abs(a.Change));
+    private decimal TotalSalesValue => FilteredSales.Sum(SaleValue);
+
+    private IEnumerable<ItemSaleSummary> TopMostSold => FilteredSales
+        .GroupBy(a => new { a.SKU, Name = a.Item?.Name ?? "-" })
+        .Select(g => new ItemSaleSummary
+        {
+            SKU = g.Key.SKU,
+            Name = g.Key.Name,
+            Quantity = g.Sum(a => Math.Abs(a.Change)),
+            Value = g.Sum(SaleValue)
+        })
+        .OrderByDescending(i => i.Quantity)
+        .Take(5);
+
+    private IEnumerable<ItemSaleSummary> TopLeastSold => FilteredSales
+        .GroupBy(a => new { a.SKU, Name = a.Item?.Name ?? "-" })
+        .Select(g => new ItemSaleSummary
+        {
+            SKU = g.Key.SKU,
+            Name = g.Key.Name,
+            Quantity = g.Sum(a => Math.Abs(a.Change)),
+            Value = g.Sum(SaleValue)
+        })
+        .OrderBy(i => i.Quantity)
+        .Take(5);
+
+    private IEnumerable<CategorySaleSummary> SalesByCategory => FilteredSales
+        .GroupBy(a => a.Item?.Category?.Name ?? "Sin categoría")
+        .Select(g => new CategorySaleSummary
+        {
+            Name = g.Key,
+            Quantity = g.Sum(a => Math.Abs(a.Change)),
+            Value = g.Sum(SaleValue)
+        })
+        .OrderByDescending(c => c.Quantity);
+
+    private class ItemSaleSummary
+    {
+        public string SKU { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public double Quantity { get; set; }
+        public decimal Value { get; set; }
+    }
+
+    private class CategorySaleSummary
+    {
+        public string Name { get; set; } = string.Empty;
+        public double Quantity { get; set; }
+        public decimal Value { get; set; }
+    }
+}
