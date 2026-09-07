@@ -12,6 +12,10 @@ namespace Inventory.Core.Services
             => !string.IsNullOrWhiteSpace(value) && RifPattern.IsMatch(value.Trim());
 
         public static string NormalizeRif(string value)
-            => value.Trim().ToUpperInvariant().Replace(" ", string.Empty);
+            => value.Trim()
+                .ToUpperInvariant()
+                .Replace(" ", string.Empty)
+                .Replace("-", string.Empty)
+                .Replace(".", string.Empty);
     }
 }

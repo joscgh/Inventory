@@ -1,17 +1,28 @@
 @page "/facturacion"
 @using Inventory.Core.Classes
+@using Inventory.Core.Services
 @using Inventory.SharedUI.Components
 @using Inventory.SharedUI.Services
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
 @inject InvoiceApiService InvoiceApi
 @inject ItemApiService ItemApi
 @inject CurrencyApiService CurrencyApi
+@inject PaymentApiService PaymentApi
 @inject UserStateService UserState
+@inject OfflineStorageService OfflineStorage
+@inject OfflineInvoiceQueueService OfflineQueue
+@inject IJSRuntime JS
 
 <div class="container-fluid mt-4">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
             <h1 class="h3 mb-1">Facturacion POS</h1>
             <p class="text-muted mb-0">Busca productos, cobra y emite la factura.</p>
+            @if (isOffline)
+            {
+                <span class="badge bg-warning text-dark">Modo offline: @pendingInvoices pendientes</span>
+            }
         </div>
         <button class="btn btn-outline-secondary" @onclick="ToggleCloseout">Resumen de caja</button>
     </div>
@@ -188,6 +199,14 @@
                                         <option value="@method.Name">@method.Name</option>
                                     }
                                 </select>
+                                @if (paymentMethod.Equals("Pago móvil", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <input class="form-control mt-2" @bind="mobileReference" placeholder="Referencia Pago Móvil" />
+                                }
+                                @if (paymentMethod.Equals("Tarjeta", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <input class="form-control mt-2" @bind="debitReference" placeholder="Referencia del POS" />
+                                }
                             </div>
                             <div class="col-6">
                                 <label class="form-label">Recibido (Bs)</label>
@@ -210,7 +229,11 @@
                     {
                         <div class="alert @(isError ? "alert-danger" : "alert-success") mt-3">@statusMessage</div>
                     }
-                    <button class="btn btn-success btn-lg w-100 mt-3" @onclick="SaveInvoice" disabled="@(!CanSaveInvoice)">Cobrar y emitir factura</button>
+                    <button class="btn btn-success btn-lg w-100 mt-3" @onclick="SaveInvoice" disabled="@(!CanSaveInvoice)">@(isOffline ? "Guardar factura offline" : "Cobrar y emitir factura")</button>
+                    @if (pendingInvoices > 0 && !isOffline)
+                    {
+                        <button class="btn btn-outline-primary w-100 mt-2" @onclick="SynchronizePending">Sincronizar @pendingInvoices pendiente(s)</button>
+                    }
                 </div>
             </div>
         </div>
@@ -229,6 +252,8 @@
     private string searchText = string.Empty;
     private string scanCode = string.Empty;
     private string paymentMethod = "Efectivo";
+    private string mobileReference = string.Empty;
+    private string debitReference = string.Empty;
     private List<TerminalPaymentMethod> paymentMethods = DefaultPaymentMethods();
     private decimal selectedQuantity = 1m;
     private decimal selectedUnitPrice;
@@ -245,6 +270,12 @@
     private List<InvoiceLine> invoiceLines = new();
     private int sessionInvoiceCount;
     private decimal sessionTotal;
+    private bool isOffline;
+    private int pendingInvoices;
+    private IJSObjectReference? offlineModule;
+    private DotNetObjectReference<FacturaPos>? offlineDotNetRef;
+    private string? onlineWatcherId;
+    private List<Currency> currencies = new();
     private readonly decimal[] keypadAmounts = { 1m, 5m, 10m, 20m, 50m, 100m };
 
     private IEnumerable<ItemUniversal> FilteredItems => items.Where(item =>
@@ -268,8 +299,18 @@
 
     protected override async Task OnInitializedAsync()
     {
-        await CurrencyApi.RefreshExchangeRatesAsync();
-        var currencies = await CurrencyApi.GetCurrenciesAsync();
+        isOffline = !await OfflineStorage.IsOnlineAsync();
+        try
+        {
+            await CurrencyApi.RefreshExchangeRatesAsync();
+            currencies = await CurrencyApi.GetCurrenciesAsync();
+            await OfflineStorage.WriteAsync("pos-currencies", currencies);
+        }
+        catch
+        {
+            isOffline = true;
+            currencies = await OfflineStorage.ReadAsync<List<Currency>>("pos-currencies") ?? new();
+        }
         var bolivar = currencies.FirstOrDefault(currency =>
             currency.Code.Equals("VES", StringComparison.OrdinalIgnoreCase)
             || currency.Code.Equals("BS", StringComparison.OrdinalIgnoreCase)
@@ -278,7 +319,6 @@
         bolivarCurrencyId = bolivar?.Id ?? 0;
         usdRate = dollar?.ExchangeRate ?? 0m;
         exchangeRateReady = bolivarCurrencyId > 0 && usdRate > 0m;
-        items = await ItemApi.GetItemsAsync();
         var user = await UserState.GetCurrentUserAsync();
         if (user != null)
         {
@@ -286,11 +326,54 @@
             customerAccountId = user.AccountId;
             accountName = user.AccountName;
             userName = $"{user.FullName} ({user.Email})";
-            terminals = (await InvoiceApi.GetTerminalsAsync(customerAccountId))
-                .Where(terminal => terminal.IsActive && terminal.StoreId.HasValue)
-                .ToList();
+            try
+            {
+                items = await ItemApi.GetItemsAsync();
+                await OfflineStorage.WriteAsync($"pos-items-{customerAccountId}", items);
+                terminals = (await InvoiceApi.GetTerminalsAsync(customerAccountId))
+                    .Where(terminal => terminal.IsActive && terminal.StoreId.HasValue).ToList();
+            }
+            catch
+            {
+                isOffline = true;
+                items = await OfflineStorage.ReadAsync<List<ItemUniversal>>($"pos-items-{customerAccountId}") ?? new();
+                terminals = await OfflineStorage.ReadAsync<List<Terminal>>($"pos-terminals-{customerAccountId}") ?? new();
+            }
+            if (terminals.Count > 0)
+            {
+                await OfflineStorage.WriteAsync($"pos-terminals-{customerAccountId}", terminals);
+            }
             terminalId = terminals.FirstOrDefault()?.Id ?? 0;
-            await LoadPaymentMethods();
+            if (!isOffline) await LoadPaymentMethods();
+        }
+        pendingInvoices = await OfflineQueue.CountAsync();
+        if (!isOffline) await SynchronizePending();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        offlineModule = await JS.InvokeAsync<IJSObjectReference>("import", "/_content/Inventory.SharedUI/offlineStorage.js");
+        offlineDotNetRef = DotNetObjectReference.Create(this);
+        onlineWatcherId = await offlineModule.InvokeAsync<string>("watchOnline", offlineDotNetRef);
+    }
+
+    [JSInvokable]
+    public async Task OnConnectionRestored()
+    {
+        isOffline = false;
+        await SynchronizePending();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task SynchronizePending()
+    {
+        var result = await OfflineQueue.SynchronizeAsync();
+        pendingInvoices = result.Remaining;
+        if (result.Synchronized > 0)
+        {
+            statusMessage = $"Se sincronizaron {result.Synchronized} factura(s) pendientes.";
+            isError = false;
         }
     }
 
@@ -458,6 +541,55 @@
             bolivarCurrencyId,
             usdRate);
 
+        if (isOffline)
+        {
+            if (!paymentMethod.Equals("Efectivo", StringComparison.OrdinalIgnoreCase))
+            {
+                isError = true;
+                statusMessage = "Sin conexión solo se permite registrar pagos en efectivo.";
+                return;
+            }
+
+            draft.Payments.Add(new InvoicePayment
+            {
+                TerminalId = terminalId,
+                MethodCode = "cash",
+                MethodName = "Efectivo",
+                Amount = amountReceived,
+                CurrencyCode = "VES",
+                Status = PaymentStatus.Approved,
+                ProviderCode = "offline-manual",
+                PaidAtUtc = DateTime.UtcNow
+            });
+            await OfflineQueue.QueueAsync(draft);
+            pendingInvoices = await OfflineQueue.CountAsync();
+            invoiceLines.Clear();
+            amountReceived = 0m;
+            selectedItem = null;
+            isError = false;
+            statusMessage = "Factura guardada offline. Se sincronizará al recuperar conexión.";
+            return;
+        }
+
+        var providerData = paymentMethod.Equals("Pago móvil", StringComparison.OrdinalIgnoreCase)
+            ? System.Text.Json.JsonSerializer.Serialize(new { @ref = mobileReference, order = draft.ClientGuid.ToString("N") })
+            : paymentMethod.Equals("Tarjeta", StringComparison.OrdinalIgnoreCase)
+                ? System.Text.Json.JsonSerializer.Serialize(new { @ref = debitReference, order = draft.ClientGuid.ToString("N") })
+                : draft.ClientGuid.ToString("N");
+        var paymentResult = await PaymentApi.ChargeAsync(new PaymentChargeRequest(
+            amountReceived,
+            "VES",
+            paymentMethods.FirstOrDefault(method => method.Name == paymentMethod)?.Code ?? "cash",
+            terminalId,
+            providerData));
+
+        if (!paymentResult.Approved)
+        {
+            isError = true;
+            statusMessage = paymentResult.ErrorMessage ?? "El punto de venta rechazó el pago.";
+            return;
+        }
+
         draft.Payments.Add(new InvoicePayment
         {
             TerminalId = terminalId,
@@ -466,13 +598,19 @@
             Amount = amountReceived,
             CurrencyCode = "VES",
             Status = PaymentStatus.Approved,
-            ProviderCode = "manual",
+            ProviderCode = "generic-pos",
+            ProviderReference = paymentResult.Reference,
+            AuthorizationCode = paymentResult.AuthorizationCode,
             PaidAtUtc = DateTime.UtcNow
         });
 
         var (success, created, error) = await InvoiceApi.CreateInvoiceAsync(draft);
         if (!success || created == null)
         {
+            if (!string.IsNullOrWhiteSpace(paymentResult.Reference))
+            {
+                await PaymentApi.CancelAsync(paymentResult.Reference);
+            }
             isError = true;
             statusMessage = error ?? "No se pudo emitir la factura.";
             return;
@@ -485,5 +623,17 @@
         invoiceLines.Clear();
         amountReceived = 0m;
         selectedItem = null;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (offlineModule != null && onlineWatcherId != null)
+                await offlineModule.InvokeVoidAsync("unwatchOnline", onlineWatcherId);
+            if (offlineModule != null) await offlineModule.DisposeAsync();
+        }
+        catch { }
+        offlineDotNetRef?.Dispose();
     }
 }

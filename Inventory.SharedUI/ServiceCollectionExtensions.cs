@@ -24,6 +24,9 @@ namespace Inventory.SharedUI
             services.AddScoped<CustomerAccountApiService>();
             services.AddScoped<ConsumerCustomerApiService>();
             services.AddScoped<AuthApiService>();
+            services.AddScoped<PaymentApiService>();
+            services.AddScoped<OfflineStorageService>();
+            services.AddScoped<OfflineInvoiceQueueService>();
             services.AddScoped<UserStateService>();
             services.AddScoped<NoteApiService>();
             services.AddScoped<InvoiceApiService>();

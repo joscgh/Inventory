@@ -1,4 +1,8 @@
 using System.Net.Http.Json;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using Inventory.Core.Services;
 using Microsoft.Extensions.Options;
 
 namespace Inventory.API.Services
@@ -58,6 +62,138 @@ namespace Inventory.API.Services
             return result;
         }
 
+        public async Task<PaymentProviderResult> ValidateMobilePaymentAsync(PaymentChargeRequest request, CancellationToken cancellationToken = default)
+        {
+            var data = ParseProviderData(request.ProviderData);
+            var keys = await GetKeysAsync(cancellationToken);
+            var apiKey = FindKey(keys.Keys, "P2C", "P2CR") ?? _options.PagoMovilApiKey;
+            if (string.IsNullOrWhiteSpace(apiKey)) return new PaymentProviderResult(false, ErrorMessage: "Ubii no devolvió una llave P2C o P2CR para el comercio.");
+
+            var payload = new Dictionary<string, object?>
+            {
+                ["bank"] = data.GetValueOrDefault("bank", string.Empty),
+                ["date"] = data.GetValueOrDefault("date", DateTime.UtcNow.ToString("yyyyMMdd")),
+                ["phoneP"] = data.GetValueOrDefault("phoneP", string.Empty),
+                ["phoneC"] = data.GetValueOrDefault("phoneC", string.Empty),
+                ["m"] = request.Amount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
+                ["ref"] = data.GetValueOrDefault("ref", string.Empty),
+                ["ci"] = data.GetValueOrDefault("ci", string.Empty),
+                ["order"] = data.GetValueOrDefault("order", request.TerminalId.ToString())
+            };
+
+            return await SendPaymentAsync("payment_pago_movil_ref", apiKey, payload, cancellationToken);
+        }
+
+        public async Task<PaymentProviderResult> ProcessDebitCardAsync(PaymentChargeRequest request, CancellationToken cancellationToken = default)
+        {
+            var data = ParseProviderData(request.ProviderData);
+            var keys = await GetKeysAsync(cancellationToken);
+            var debitKey = keys.Keys.FirstOrDefault(key =>
+                string.Equals(key.BtnAlias, "TDD", StringComparison.OrdinalIgnoreCase)
+                && (string.IsNullOrWhiteSpace(_options.TarjetaDebitoBankCode)
+                    || string.Equals(key.BtnBank, _options.TarjetaDebitoBankCode, StringComparison.OrdinalIgnoreCase)));
+            var apiKey = debitKey?.BtnKey ?? _options.TarjetaDebitoApiKey;
+            if (string.IsNullOrWhiteSpace(apiKey)) return new PaymentProviderResult(false, ErrorMessage: "Ubii no devolvió una llave TDD para el comercio.");
+
+            var payload = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in data)
+            {
+                payload[item.Key] = item.Value;
+            }
+
+            payload["m"] = request.Amount.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+            payload["cu"] = request.CurrencyCode;
+            payload["order"] = data.GetValueOrDefault("order", request.TerminalId.ToString());
+            return await SendPaymentAsync(_options.TarjetaDebitoPath, apiKey, payload, cancellationToken);
+        }
+
+        private static string? FindKey(IEnumerable<UbiiPaymentKey> keys, params string[] aliases)
+        {
+            var aliasSet = aliases
+                .Where(alias => !string.IsNullOrWhiteSpace(alias))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+            return keys
+                .Where(key => !string.IsNullOrWhiteSpace(key.BtnKey)
+                              && aliasSet.Contains(key.BtnAlias ?? string.Empty))
+                .Select(key => key.BtnKey)
+                .FirstOrDefault();
+        }
+
+        private async Task<PaymentProviderResult> SendPaymentAsync(string path, string apiKey, Dictionary<string, object?> payload, CancellationToken cancellationToken)
+        {
+            var check = await CheckClientAsync(cancellationToken);
+            var claims = ReadTokenClaims(check.Token!);
+            var encrypted = Encrypt(JsonSerializer.Serialize(payload), claims.Key, claims.Iv);
+            using var request = new HttpRequestMessage(HttpMethod.Post, path);
+            AddCommonHeaders(request);
+            request.Headers.Add("X-API-KEY", apiKey);
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", check.Token);
+            request.Content = JsonContent.Create(encrypted);
+            using var response = await _http.SendAsync(request, cancellationToken);
+            var body = await response.Content.ReadFromJsonAsync<UbiiPaymentResponse>(cancellationToken: cancellationToken);
+            var approved = body != null && body.R == "0" && body.M?.Contains("APROB", StringComparison.OrdinalIgnoreCase) == true;
+            return new PaymentProviderResult(approved, body?.Ref, body?.Trace, approved ? null : body?.CodS ?? body?.M ?? "Ubii rechazó el pago.");
+        }
+
+        private static Dictionary<string, string> ParseProviderData(string? providerData)
+        {
+            if (string.IsNullOrWhiteSpace(providerData))
+            {
+                return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            try
+            {
+                using var document = JsonDocument.Parse(providerData);
+                if (document.RootElement.ValueKind != JsonValueKind.Object)
+                {
+                    return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                }
+
+                var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                foreach (var property in document.RootElement.EnumerateObject())
+                {
+                    var key = property.Name.TrimStart('@');
+                    result[key] = property.Value.ToString();
+                }
+
+                return result;
+            }
+            catch (JsonException)
+            {
+                return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            }
+        }
+
+        private static (byte[] Key, byte[] Iv) ReadTokenClaims(string token)
+        {
+            var parts = token.Split('.');
+            var json = Encoding.UTF8.GetString(Base64UrlDecode(parts[1]));
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            return (Encoding.UTF8.GetBytes(root.GetProperty("k").GetString()!), Encoding.UTF8.GetBytes(root.GetProperty("i").GetString()!));
+        }
+
+        private static string Encrypt(string plainText, byte[] key, byte[] iv)
+        {
+            using var aes = Aes.Create();
+            aes.Key = key;
+            aes.IV = iv;
+            aes.Mode = CipherMode.CBC;
+            aes.Padding = PaddingMode.PKCS7;
+            using var encryptor = aes.CreateEncryptor();
+            var bytes = encryptor.TransformFinalBlock(Encoding.UTF8.GetBytes(plainText), 0, Encoding.UTF8.GetByteCount(plainText));
+            return Convert.ToBase64String(bytes);
+        }
+
+        private static byte[] Base64UrlDecode(string value)
+        {
+            value = value.Replace('-', '+').Replace('_', '/');
+            value = value.PadRight(value.Length + (4 - value.Length % 4) % 4, '=');
+            return Convert.FromBase64String(value);
+        }
+
         private void AddCommonHeaders(HttpRequestMessage request)
         {
             request.Headers.Add("X-CLIENT-ID", _options.ClientId);
@@ -100,5 +236,15 @@ namespace Inventory.API.Services
         public string? BtnKey { get; set; }
         public string? BtnName { get; set; }
         public string? BtnBank { get; set; }
+    }
+
+    public sealed class UbiiPaymentResponse
+    {
+        public string? R { get; set; }
+        public string? M { get; set; }
+        public string? Ref { get; set; }
+        public string? CodR { get; set; }
+        public string? CodS { get; set; }
+        public string? Trace { get; set; }
     }
 }

@@ -1,0 +1,319 @@
+@page "/documents"
+@using Inventory.Core.Classes
+@using Inventory.SharedUI.Services
+@inject NoteApiService NoteApi
+@inject InvoiceApiService InvoiceApi
+@inject CurrencyApiService CurrencyApi
+
+<div class="container-fluid mt-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h1 class="h3 mb-1">Documentos</h1>
+            <p class="text-muted mb-0">Pedidos, notas de entrega y facturas en un solo módulo.</p>
+        </div>
+        <a class="btn btn-outline-secondary" href="/inventory">Volver al inventario</a>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Tipo</label>
+                    <select class="form-select" @bind="selectedType" @bind:after="ApplyFilters">
+                        <option value="all">Todos</option>
+                        <option value="pedido">Pedidos</option>
+                        <option value="entrega">Notas de entrega</option>
+                        <option value="factura">Facturas</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Código o cliente</label>
+                    <input class="form-control" @bind="searchText" @bind:event="oninput" @onkeyup="ApplyFilters" placeholder="Buscar..." />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Mostrar moneda</label>
+                    <select class="form-select" @bind="selectedCurrencyCode" @bind:after="ApplyFilters">
+                        @foreach (var currency in currencies)
+                        {
+                            <option value="@currency.Code">@currency.Code</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Desde</label>
+                    <input type="date" class="form-control" @bind="fromDate" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">Hasta</label>
+                    <input type="date" class="form-control" @bind="toDate" />
+                </div>
+                <div class="col-md-2 d-flex gap-2">
+                    <button class="btn btn-primary w-100" @onclick="ApplyFilters">Filtrar</button>
+                    <button class="btn btn-outline-secondary" @onclick="ClearFilters">Limpiar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @if (isLoading)
+    {
+        <div class="alert alert-light border">Cargando documentos...</div>
+    }
+    else if (!filteredDocuments.Any())
+    {
+        <div class="alert alert-info">No hay documentos para los filtros seleccionados.</div>
+    }
+    else
+    {
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h2 class="h5 mb-0">Resultados</h2>
+                    <span class="text-muted">@filteredDocuments.Count documento(s)</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead><tr><th>Tipo</th><th>Número</th><th>Fecha</th><th>Cliente</th><th>Estado</th><th>Moneda</th><th class="text-end">Total</th><th></th></tr></thead>
+                        <tbody>
+                            @foreach (var document in PagedDocuments)
+                            {
+                                <tr>
+                                    <td><span class="badge @BadgeClass(document.Kind)">@document.KindLabel</span></td>
+                                    <td><strong>@document.Number</strong></td>
+                                    <td>@document.Date.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td>@(string.IsNullOrWhiteSpace(document.Customer) ? "Sin cliente" : document.Customer)</td>
+                                    <td>@document.Status</td>
+                                    <td>@selectedCurrencyCode</td>
+                                    <td class="text-end"><strong>@CurrencySymbol @ConvertAmount(document.Total, document.CurrencyCode, document.ExchangeRate).ToString("N2")</strong></td>
+                                    <td><button class="btn btn-sm btn-outline-primary" @onclick="() => selectedDocument = document">Detalle</button></td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                @if (filteredDocuments.Count > pageSize)
+                {
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="form-label mb-0">Por página</label>
+                            <select class="form-select form-select-sm" style="width:auto" @bind="pageSize" @bind:after="ResetPage">
+                                <option value="10">10</option>
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                            </select>
+                            <span class="text-muted small">Página @CurrentPage de @TotalPages</span>
+                        </div>
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="PreviousPage" disabled="@(pageIndex == 0)">Anterior</button>
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="NextPage" disabled="@(pageIndex >= TotalPages - 1)">Siguiente</button>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    @if (selectedDocument != null)
+    {
+        <div class="modal fade show" style="display:block" tabindex="-1">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title">@selectedDocument.KindLabel @selectedDocument.Number</h5>
+                        <button type="button" class="btn-close" @onclick="CloseDetail"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3 mb-4">
+                            <div class="col-sm-6"><span class="text-muted small">Cliente</span><div>@(string.IsNullOrWhiteSpace(selectedDocument.Customer) ? "Sin cliente" : selectedDocument.Customer)</div></div>
+                            <div class="col-sm-3"><span class="text-muted small">Estado</span><div>@selectedDocument.Status</div></div>
+                            <div class="col-sm-3"><span class="text-muted small">Fecha</span><div>@selectedDocument.Date.ToString("dd/MM/yyyy HH:mm")</div></div>
+                            <div class="col-sm-6"><span class="text-muted small">Total</span><div class="fw-semibold">@CurrencySymbol @ConvertAmount(selectedDocument.Total, selectedDocument.CurrencyCode, selectedDocument.ExchangeRate).ToString("N2")</div></div>
+                        </div>
+
+                        <h6>Detalle de productos</h6>
+                        @if (selectedDocument.Lines.Any())
+                        {
+                            <div class="table-responsive">
+                                <table class="table table-sm align-middle">
+                                    <thead><tr><th>Producto</th><th class="text-end">Cantidad</th><th class="text-end">Precio</th><th class="text-end">Impuesto</th><th class="text-end">Total</th></tr></thead>
+                                    <tbody>
+                                        @foreach (var line in selectedDocument.Lines)
+                                        {
+                                            <tr>
+                                                <td>@line.Description</td>
+                                                <td class="text-end">@line.Quantity.ToString("N2")</td>
+                                                <td class="text-end">@CurrencySymbol @ConvertAmount(line.UnitPrice, selectedDocument.CurrencyCode, selectedDocument.ExchangeRate).ToString("N2")</td>
+                                                <td class="text-end">@line.TaxRate.ToString("N2")%</td>
+                                                <td class="text-end">@CurrencySymbol @ConvertAmount(line.Total, selectedDocument.CurrencyCode, selectedDocument.ExchangeRate).ToString("N2")</td>
+                                            </tr>
+                                        }
+                                    </tbody>
+                                </table>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="alert alert-light border">Este documento no tiene líneas detalladas.</div>
+                        }
+
+                        @if (selectedDocument.Payments.Any())
+                        {
+                            <h6 class="mt-4">Pagos</h6>
+                            @foreach (var payment in selectedDocument.Payments)
+                            {
+                                <div class="d-flex justify-content-between border-bottom py-2">
+                                    <span>@payment.MethodName <small class="text-muted">(@payment.Status)</small></span>
+                                    <strong>@CurrencySymbol @ConvertAmount(payment.Amount, payment.CurrencyCode, null).ToString("N2")</strong>
+                                </div>
+                            }
+                        }
+                    </div>
+                    <div class="modal-footer"><button class="btn btn-secondary" @onclick="CloseDetail">Cerrar</button></div>
+                </div>
+            </div>
+        </div>
+        <div class="modal-backdrop fade show"></div>
+    }
+</div>
+
+@code {
+    private List<Note> notes = new();
+    private List<Invoice> invoices = new();
+    private List<Currency> currencies = new();
+    private List<DocumentRow> filteredDocuments = new();
+    private bool isLoading = true;
+    private string selectedType = "all";
+    private string searchText = string.Empty;
+    private string selectedCurrencyCode = "VES";
+    private DateTime? fromDate;
+    private DateTime? toDate;
+    private DocumentRow? selectedDocument;
+    private int pageIndex;
+    private int pageSize = 10;
+
+    private string CurrencySymbol => currencies.FirstOrDefault(currency =>
+        currency.Code.Equals(selectedCurrencyCode, StringComparison.OrdinalIgnoreCase))?.Symbol
+        ?? selectedCurrencyCode;
+
+    private IEnumerable<DocumentRow> PagedDocuments => filteredDocuments
+        .Skip(pageIndex * pageSize)
+        .Take(pageSize);
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(filteredDocuments.Count / (double)pageSize));
+
+    private int CurrentPage => pageIndex + 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var notesTask = NoteApi.GetNotesAsync();
+        var invoicesTask = InvoiceApi.GetInvoicesAsync(InvoiceDocumentType.Factura);
+        currencies = await CurrencyApi.GetCurrenciesAsync();
+        if (!currencies.Any(currency => currency.Code.Equals(selectedCurrencyCode, StringComparison.OrdinalIgnoreCase)))
+        {
+            selectedCurrencyCode = currencies.FirstOrDefault()?.Code ?? "VES";
+        }
+        await Task.WhenAll(notesTask, invoicesTask);
+        notes = await notesTask;
+        invoices = await invoicesTask;
+        isLoading = false;
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        filteredDocuments = notes.Select(note => new DocumentRow(
+                note.Type == NoteType.Pedido ? "pedido" : "entrega",
+                note.Type == NoteType.Pedido ? "Pedido" : "Nota de entrega",
+                note.NoteNumber, note.IssueDate, note.CustomerName, "Registrado", note.Total, note.Currency?.Code ?? "VES", note.ExchangeRate,
+                note.Lines.Select(line => new DetailLine(line.Description, line.Quantity, line.UnitPrice, line.TaxRate, line.Total)), Array.Empty<InvoicePayment>()))
+            .Concat(invoices.Select(invoice => new DocumentRow(
+                "factura", "Factura", $"{invoice.Serie}-{invoice.Number}", invoice.IssuedAt,
+                invoice.CustomerName, invoice.Status == InvoiceStatus.Voided ? "Anulada" : "Emitida",
+                invoice.Total, invoice.Currency?.Code ?? "VES", invoice.ExchangeRate,
+                invoice.Lines.Select(line => new DetailLine(line.Description, line.Quantity, line.UnitPrice, line.TaxRate, line.Total)), invoice.Payments)))
+            .Where(Matches)
+            .OrderByDescending(document => document.Date)
+            .ToList();
+        ResetPage();
+    }
+
+    private bool Matches(DocumentRow document)
+    {
+        if (selectedType != "all" && document.Kind != selectedType) return false;
+        if (fromDate.HasValue && document.Date.Date < fromDate.Value.Date) return false;
+        if (toDate.HasValue && document.Date.Date > toDate.Value.Date) return false;
+        return string.IsNullOrWhiteSpace(searchText)
+            || document.Number.Contains(searchText, StringComparison.OrdinalIgnoreCase)
+            || document.Customer.Contains(searchText, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private void ClearFilters()
+    {
+        selectedType = "all";
+        searchText = string.Empty;
+        fromDate = null;
+        toDate = null;
+        ApplyFilters();
+    }
+
+    private void ResetPage()
+    {
+        pageIndex = 0;
+    }
+
+    private void PreviousPage()
+    {
+        if (pageIndex > 0) pageIndex--;
+    }
+
+    private void NextPage()
+    {
+        if (pageIndex < TotalPages - 1) pageIndex++;
+    }
+
+    private decimal ConvertAmount(decimal amount, string sourceCurrencyCode, decimal? documentRate)
+    {
+        if (string.Equals(sourceCurrencyCode, selectedCurrencyCode, StringComparison.OrdinalIgnoreCase))
+        {
+            return amount;
+        }
+
+        var sourceRate = GetRate(sourceCurrencyCode, documentRate);
+        var targetRate = GetRate(selectedCurrencyCode, null);
+        if (sourceRate <= 0m || targetRate <= 0m) return amount;
+        return amount * sourceRate / targetRate;
+    }
+
+    private decimal GetRate(string code, decimal? documentRate)
+    {
+        if (code.Equals("VES", StringComparison.OrdinalIgnoreCase) || code.Equals("BS", StringComparison.OrdinalIgnoreCase))
+        {
+            return 1m;
+        }
+
+        if (documentRate.HasValue && documentRate.Value > 0m)
+        {
+            return documentRate.Value;
+        }
+
+        return currencies.FirstOrDefault(currency => currency.Code.Equals(code, StringComparison.OrdinalIgnoreCase))?.ExchangeRate ?? 0m;
+    }
+
+    private void CloseDetail() => selectedDocument = null;
+
+    private static string BadgeClass(string kind) => kind switch
+    {
+        "factura" => "bg-success",
+        "pedido" => "bg-warning text-dark",
+        _ => "bg-info"
+    };
+
+    private sealed record DetailLine(string Description, decimal Quantity, decimal UnitPrice, decimal TaxRate, decimal Total);
+
+    private sealed record DocumentRow(string Kind, string KindLabel, string Number, DateTime Date, string Customer, string Status, decimal Total, string CurrencyCode, decimal? ExchangeRate, IEnumerable<DetailLine> Lines, IEnumerable<InvoicePayment> Payments)
+    {
+        public decimal TotalBs => Kind == "factura" || !ExchangeRate.HasValue || ExchangeRate <= 0m
+            ? Total
+            : Total * ExchangeRate.Value;
+    }
+}

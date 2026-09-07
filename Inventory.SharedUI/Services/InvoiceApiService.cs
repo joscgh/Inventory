@@ -32,7 +32,7 @@ namespace Inventory.SharedUI.Services
                 CreatedByUserId = createdByUserId,
                 CustomerName = customerName,
                 CustomerDocument = customerDocument,
-                IssuedAt = DateTime.Now,
+                IssuedAt = DateTime.UtcNow,
                 Status = InvoiceStatus.Issued,
                 DocumentType = InvoiceDocumentType.Factura,
                 EmissionMode = emissionMode,
@@ -101,6 +101,29 @@ namespace Inventory.SharedUI.Services
             if (response.IsSuccessStatusCode) return (true, null);
             var errorText = await response.Content.ReadAsStringAsync();
             return (false, string.IsNullOrWhiteSpace(errorText) ? response.ReasonPhrase : errorText);
+        }
+
+        public async Task<List<InvoiceNumberRange>> GetRangesAsync(int terminalId) =>
+            await _http.GetFromJsonAsync<List<InvoiceNumberRange>>($"api/terminals/{terminalId}/ranges?documentType=0") ?? new();
+
+        public async Task<(bool Success, InvoiceNumberRange? Range, string? ErrorMessage)> AssignRangeAsync(
+            int terminalId, int size, string controlPrefix, long? controlFromNumber, string? authorization)
+        {
+            var response = await _http.PostAsJsonAsync($"api/terminals/{terminalId}/ranges", new
+            {
+                documentType = InvoiceDocumentType.Factura,
+                size,
+                controlPrefix,
+                controlFromNumber,
+                authorization
+            });
+            if (!response.IsSuccessStatusCode)
+            {
+                var errorText = await response.Content.ReadAsStringAsync();
+                return (false, null, string.IsNullOrWhiteSpace(errorText) ? response.ReasonPhrase : errorText);
+            }
+
+            return (true, await response.Content.ReadFromJsonAsync<InvoiceNumberRange>(), null);
         }
 
         public async Task<List<Invoice>> GetInvoicesAsync(

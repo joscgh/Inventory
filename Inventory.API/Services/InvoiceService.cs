@@ -7,9 +7,9 @@ namespace Inventory.API.Services
     public class InvoiceService : IInvoiceService
     {
         private readonly IInvoiceRepository _repository;
-        private readonly ITerminalRepository _terminals;
+        private readonly ITerminalService _terminals;
 
-        public InvoiceService(IInvoiceRepository repository, ITerminalRepository terminals)
+        public InvoiceService(IInvoiceRepository repository, ITerminalService terminals)
         {
             _repository = repository;
             _terminals = terminals;
@@ -48,6 +48,12 @@ namespace Inventory.API.Services
                 return InvoiceRegistrationResult.Fail("La factura debe identificar al cliente.");
             }
 
+            // PostgreSQL timestamp with time zone solo acepta DateTime en UTC.
+            // Normaliza facturas antiguas u offline que lleguen con hora local.
+            invoice.IssuedAt = invoice.IssuedAt.Kind == DateTimeKind.Utc
+                ? invoice.IssuedAt
+                : invoice.IssuedAt.ToUniversalTime();
+
             if (invoice.Lines.Any(line => line.Quantity <= 0m
                 || line.UnitPrice < 0m
                 || line.Discount < 0m
@@ -72,7 +78,7 @@ namespace Inventory.API.Services
                 return InvoiceRegistrationResult.Duplicate(existing);
             }
 
-            var terminal = await _terminals.GetByIdAsync(invoice.TerminalId);
+            var terminal = await _terminals.FindByIdAsync(invoice.TerminalId);
             if (terminal == null)
             {
                 return InvoiceRegistrationResult.Fail("La caja indicada no existe.");
@@ -97,15 +103,27 @@ namespace Inventory.API.Services
             }
 
             if (terminal.Account == null
-                || !FiscalIdentifierValidator.IsValidRif(terminal.Account.Document)
-                || terminal.Store.CustomerAccountId != terminal.CustomerAccountId
-                || !string.Equals(
-                    FiscalIdentifierValidator.NormalizeRif(terminal.Account.Document),
-                    FiscalIdentifierValidator.NormalizeRif(terminal.Store.Rif),
-                    StringComparison.OrdinalIgnoreCase))
+                || terminal.Store.CustomerAccountId != terminal.CustomerAccountId)
             {
                 return InvoiceRegistrationResult.Fail(
-                    "La tienda emisora debe pertenecer al mismo contribuyente que la cuenta de la caja.");
+                    $"La tienda {terminal.Store.Name} no pertenece a la cuenta de la caja {terminal.Code}. " +
+                    "Revisa la cuenta y la tienda asociadas en /terminals.");
+            }
+
+            if (!FiscalIdentifierValidator.IsValidRif(terminal.Account.Document)
+                || !FiscalIdentifierValidator.IsValidRif(terminal.Store.Rif))
+            {
+                return InvoiceRegistrationResult.Fail(
+                    "La cuenta y la tienda de la caja deben tener un RIF válido.");
+            }
+
+            if (!string.Equals(
+                FiscalIdentifierValidator.NormalizeRif(terminal.Account.Document),
+                FiscalIdentifierValidator.NormalizeRif(terminal.Store.Rif),
+                StringComparison.OrdinalIgnoreCase))
+            {
+                return InvoiceRegistrationResult.Fail(
+                    $"El RIF de la cuenta ({terminal.Account.Document}) no coincide con el RIF de la tienda ({terminal.Store.Rif}).");
             }
 
             if (invoice.CustomerAccountId <= 0)
@@ -124,6 +142,12 @@ namespace Inventory.API.Services
                 return InvoiceRegistrationResult.Fail(paymentError);
             }
 
+            var rangeError = await EnsureAvailableRangeAsync(terminal);
+            if (rangeError != null)
+            {
+                return InvoiceRegistrationResult.Fail(rangeError);
+            }
+
             try
             {
                 var saved = await _repository.AddAsync(invoice);
@@ -137,6 +161,25 @@ namespace Inventory.API.Services
         }
 
         public Task<Invoice?> VoidAsync(int id, string reason) => _repository.VoidAsync(id, reason);
+
+        private async Task<string?> EnsureAvailableRangeAsync(Terminal terminal)
+        {
+            var ranges = await _terminals.ListRangesAsync(terminal.Id, InvoiceDocumentType.Factura);
+            if (ranges.Any(range => range.Status == InvoiceRangeStatus.Active && range.Remaining > 0))
+            {
+                return null;
+            }
+
+            var assignment = await _terminals.AssignRangeAsync(terminal.Id, new RangeAssignmentRequest
+            {
+                DocumentType = InvoiceDocumentType.Factura,
+                Size = 500
+            });
+
+            return assignment.Error == null
+                ? null
+                : $"No se pudo preparar la numeración de la caja {terminal.Code}: {assignment.Error}";
+        }
 
         private static string? ValidateEmissionMode(Invoice invoice)
         {
