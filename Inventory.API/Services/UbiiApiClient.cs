@@ -25,8 +25,8 @@ namespace Inventory.API.Services
             ValidateConfiguration();
             using var request = new HttpRequestMessage(HttpMethod.Get, "check_client_id");
             AddCommonHeaders(request);
-            using var response = await _http.SendAsync(request, cancellationToken);
-            response.EnsureSuccessStatusCode();
+            using var response = await SendWithTransientRetryAsync(request, cancellationToken);
+            await EnsureUbiiSuccessAsync(response, "check_client_id", cancellationToken);
             var result = await response.Content.ReadFromJsonAsync<UbiiClientCheckResponse>(cancellationToken: cancellationToken)
                 ?? throw new InvalidOperationException("Ubii devolvió una respuesta vacía al validar el comercio.");
             if (!string.Equals(result.R, "0", StringComparison.OrdinalIgnoreCase) || string.IsNullOrWhiteSpace(result.Token))
@@ -50,8 +50,8 @@ namespace Inventory.API.Services
             using var request = new HttpRequestMessage(HttpMethod.Get, "get_keys");
             AddCommonHeaders(request);
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", _token);
-            using var response = await _http.SendAsync(request, cancellationToken);
-            response.EnsureSuccessStatusCode();
+            using var response = await SendWithTransientRetryAsync(request, cancellationToken);
+            await EnsureUbiiSuccessAsync(response, "get_keys", cancellationToken);
             var result = await response.Content.ReadFromJsonAsync<UbiiKeysResponse>(cancellationToken: cancellationToken)
                 ?? throw new InvalidOperationException("Ubii devolvió una respuesta vacía al obtener las llaves.");
             if (!string.Equals(result.R, "0", StringComparison.OrdinalIgnoreCase))
@@ -130,10 +130,60 @@ namespace Inventory.API.Services
             request.Headers.Add("X-API-KEY", apiKey);
             request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", check.Token);
             request.Content = JsonContent.Create(encrypted);
-            using var response = await _http.SendAsync(request, cancellationToken);
+            using var response = await SendWithTransientRetryAsync(request, cancellationToken);
+            await EnsureUbiiSuccessAsync(response, path, cancellationToken);
             var body = await response.Content.ReadFromJsonAsync<UbiiPaymentResponse>(cancellationToken: cancellationToken);
             var approved = body != null && body.R == "0" && body.M?.Contains("APROB", StringComparison.OrdinalIgnoreCase) == true;
             return new PaymentProviderResult(approved, body?.Ref, body?.Trace, approved ? null : body?.CodS ?? body?.M ?? "Ubii rechazó el pago.");
+        }
+
+        private async Task<HttpResponseMessage> SendWithTransientRetryAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = await _http.SendAsync(request, cancellationToken);
+            if (response.StatusCode != System.Net.HttpStatusCode.ServiceUnavailable)
+            {
+                return response;
+            }
+
+            response.Dispose();
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+            return await _http.SendAsync(await CloneRequestAsync(request, cancellationToken), cancellationToken);
+        }
+
+        private static async Task<HttpRequestMessage> CloneRequestAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var clone = new HttpRequestMessage(request.Method, request.RequestUri);
+            foreach (var header in request.Headers)
+            {
+                clone.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+
+            if (request.Content is not null)
+            {
+                var content = await request.Content.ReadAsByteArrayAsync(cancellationToken);
+                clone.Content = new ByteArrayContent(content);
+                foreach (var header in request.Content.Headers)
+                {
+                    clone.Content.Headers.TryAddWithoutValidation(header.Key, header.Value);
+                }
+            }
+
+            return clone;
+        }
+
+        private static async Task EnsureUbiiSuccessAsync(HttpResponseMessage response, string operation, CancellationToken cancellationToken)
+        {
+            if (response.IsSuccessStatusCode)
+            {
+                return;
+            }
+
+            var detail = await response.Content.ReadAsStringAsync(cancellationToken);
+            var suffix = string.IsNullOrWhiteSpace(detail) ? string.Empty : $" Respuesta: {detail.Trim()}";
+            throw new HttpRequestException(
+                $"Ubii no está disponible para {operation}. HTTP {(int)response.StatusCode} ({response.ReasonPhrase}). URL: {response.RequestMessage?.RequestUri}.{suffix}",
+                null,
+                response.StatusCode);
         }
 
         private static Dictionary<string, string> ParseProviderData(string? providerData)

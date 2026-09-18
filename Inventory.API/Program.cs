@@ -87,13 +87,6 @@ builder.Services.AddHttpClient<GenericPosPaymentProvider>((serviceProvider, clie
 });
 builder.Services.AddScoped<GenericPosPaymentProvider>();
 builder.Services.AddScoped<ManualPaymentProvider>();
-builder.Services.AddScoped<IPaymentProvider>(serviceProvider =>
-{
-    var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<GenericPosOptions>>().Value;
-    return options.Enabled
-        ? serviceProvider.GetRequiredService<GenericPosPaymentProvider>()
-        : serviceProvider.GetRequiredService<ManualPaymentProvider>();
-});
 builder.Services.AddHttpClient<UbiiApiClient>((serviceProvider, client) =>
 {
     var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<UbiiOptions>>().Value;
