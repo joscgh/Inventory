@@ -32,6 +32,10 @@ namespace Inventory.API.Data
         public DbSet<Inventory.Core.Classes.InvoiceLine> InvoiceLines { get; set; }
         public DbSet<Inventory.Core.Classes.InvoicePayment> InvoicePayments { get; set; }
         public DbSet<Inventory.Core.Classes.TerminalPaymentMethod> TerminalPaymentMethods { get; set; }
+        public DbSet<Inventory.Core.Classes.RestaurantOrder> RestaurantOrders { get; set; }
+        public DbSet<Inventory.Core.Classes.RestaurantOrderLine> RestaurantOrderLines { get; set; }
+        public DbSet<Inventory.Core.Classes.RestaurantTable> RestaurantTables { get; set; }
+        public DbSet<Inventory.Core.Classes.RestaurantMenuItem> RestaurantMenuItems { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -417,6 +421,38 @@ namespace Inventory.API.Data
                 .WithMany()
                 .HasForeignKey(p => p.TerminalId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<Inventory.Core.Classes.RestaurantOrder>()
+                .HasMany(o => o.Lines)
+                .WithOne()
+                .HasForeignKey(l => l.RestaurantOrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<Inventory.Core.Classes.RestaurantOrder>()
+                .HasIndex(o => new { o.TableName, o.Status });
+
+            modelBuilder.Entity<Inventory.Core.Classes.RestaurantOrderLine>()
+                .HasKey(l => l.Id);
+
+            modelBuilder.Entity<Inventory.Core.Classes.RestaurantTable>()
+                .HasKey(table => table.Id);
+
+            modelBuilder.Entity<Inventory.Core.Classes.RestaurantTable>()
+                .HasIndex(table => table.Name)
+                .IsUnique();
+
+            modelBuilder.Entity<Inventory.Core.Classes.RestaurantMenuItem>()
+                .HasKey(menuItem => menuItem.Id);
+
+            modelBuilder.Entity<Inventory.Core.Classes.RestaurantMenuItem>()
+                .HasIndex(menuItem => menuItem.ItemUniversalId)
+                .IsUnique();
+
+            modelBuilder.Entity<Inventory.Core.Classes.RestaurantMenuItem>()
+                .HasOne(menuItem => menuItem.Item)
+                .WithMany()
+                .HasForeignKey(menuItem => menuItem.ItemUniversalId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

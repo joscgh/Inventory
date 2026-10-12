@@ -8,19 +8,19 @@
         <div class="col-lg-6 mb-4">
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <h3 class="card-title">📁 Manage Categories</h3>
-                    <p class="text-muted">Create and maintain categories for inventory items.</p>
+                    <h3 class="card-title">📁 Administrar categorías</h3>
+                    <p class="text-muted">Crea y administra categorías para los productos del inventario.</p>
 
                     <div class="mb-3">
-                        <label class="form-label">Name</label>
-                        <input class="form-control" @bind="categoryModel.Name" placeholder="Automotive" />
+                        <label class="form-label">Nombre</label>
+                        <input class="form-control" @bind="categoryModel.Name" placeholder="Automoción" />
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Description</label>
-                        <textarea class="form-control" @bind="categoryModel.Description" rows="3" placeholder="E.g. parts for automotive maintenance"></textarea>
+                        <label class="form-label">Descripción</label>
+                        <textarea class="form-control" @bind="categoryModel.Description" rows="3" placeholder="Ej.: repuestos para mantenimiento automotriz"></textarea>
                     </div>
 
-                    <button class="btn btn-primary" @onclick="SaveCategory">Save Category</button>
+                    <button class="btn btn-primary" @onclick="SaveCategory">Guardar categoría</button>
 
                     @if (!string.IsNullOrEmpty(message))
                     {
@@ -35,13 +35,13 @@
         <div class="col-lg-6 mb-4">
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <h3 class="card-title">Existing Categories</h3>
+                    <h3 class="card-title">Categorías existentes</h3>
                     <div class="table-responsive">
                         <table class="table table-sm">
                             <thead>
                                 <tr>
-                                    <th>Name</th>
-                                    <th>Description</th>
+                                    <th>Nombre</th>
+                                    <th>Descripción</th>
                                     <th></th>
                                 </tr>
                             </thead>
@@ -49,7 +49,7 @@
                                 @if (!categories.Any())
                                 {
                                     <tr>
-                                        <td colspan="3" class="text-muted">No categories saved yet.</td>
+                                        <td colspan="3" class="text-muted">Todavía no hay categorías guardadas.</td>
                                     </tr>
                                 }
                                 else
@@ -60,8 +60,8 @@
                                             <td>@category.Name</td>
                                             <td>@category.Description</td>
                                             <td>
-                                                <button class="btn btn-sm btn-outline-secondary me-2" @onclick="() => EditCategory(category)">Edit</button>
-                                                <button class="btn btn-danger btn-sm" @onclick="() => DeleteCategory(category.Id)">Delete</button>
+                                                <button class="btn btn-sm btn-outline-secondary me-2" @onclick="() => EditCategory(category)">Editar</button>
+                                                <button class="btn btn-danger btn-sm" @onclick="() => DeleteCategory(category.Id)">Eliminar</button>
                                             </td>
                                         </tr>
                                     }
@@ -99,7 +99,7 @@
 
         if (string.IsNullOrWhiteSpace(categoryModel.Name))
         {
-            message = "Please enter a valid category name.";
+            message = "Escribe un nombre de categoría válido.";
             messageClass = "alert alert-warning";
             return;
         }
@@ -107,14 +107,14 @@
         var success = await CategoryService.SaveCategoryAsync(categoryModel);
         if (success)
         {
-            message = "Category saved successfully.";
+            message = "La categoría se guardó correctamente.";
             messageClass = "alert alert-success";
             categoryModel = new Category();
             await LoadCategories();
         }
         else
         {
-            message = "Could not save the category. It may already exist.";
+            message = "No se pudo guardar la categoría. Es posible que ya exista.";
             messageClass = "alert alert-danger";
         }
     }
@@ -138,7 +138,7 @@
         }
         else
         {
-            message = "Could not delete the category.";
+            message = "No se pudo eliminar la categoría.";
             messageClass = "alert alert-danger";
         }
     }

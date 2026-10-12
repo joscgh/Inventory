@@ -76,6 +76,7 @@ builder.Services.AddScoped<IInvoiceRepository, InvoiceRepository>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.Configure<UbiiOptions>(builder.Configuration.GetSection("Ubii"));
 builder.Services.Configure<GenericPosOptions>(builder.Configuration.GetSection("GenericPos"));
+builder.Services.Configure<StripeOptions>(builder.Configuration.GetSection("Stripe"));
 builder.Services.AddHttpClient<GenericPosPaymentProvider>((serviceProvider, client) =>
 {
     var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<GenericPosOptions>>().Value;
@@ -85,7 +86,21 @@ builder.Services.AddHttpClient<GenericPosPaymentProvider>((serviceProvider, clie
     }
     client.Timeout = TimeSpan.FromSeconds(60);
 });
+builder.Services.AddHttpClient<StripePaymentProvider>((serviceProvider, client) =>
+{
+    var options = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<StripeOptions>>().Value;
+    if (!string.IsNullOrWhiteSpace(options.BaseUrl))
+    {
+        client.BaseAddress = new Uri(options.BaseUrl.TrimEnd('/') + "/");
+    }
+    client.Timeout = TimeSpan.FromSeconds(60);
+    if (!string.IsNullOrWhiteSpace(options.ApiKey))
+    {
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", options.ApiKey);
+    }
+});
 builder.Services.AddScoped<GenericPosPaymentProvider>();
+builder.Services.AddScoped<StripePaymentProvider>();
 builder.Services.AddScoped<ManualPaymentProvider>();
 builder.Services.AddHttpClient<UbiiApiClient>((serviceProvider, client) =>
 {
@@ -98,6 +113,8 @@ builder.Services.AddScoped<IPaymentProvider>(serviceProvider =>
 {
     var ubii = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<UbiiOptions>>().Value;
     if (ubii.Enabled) return serviceProvider.GetRequiredService<UbiiPaymentProvider>();
+    var stripe = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<StripeOptions>>().Value;
+    if (stripe.Enabled) return serviceProvider.GetRequiredService<StripePaymentProvider>();
     var generic = serviceProvider.GetRequiredService<Microsoft.Extensions.Options.IOptions<GenericPosOptions>>().Value;
     return generic.Enabled
         ? serviceProvider.GetRequiredService<GenericPosPaymentProvider>()

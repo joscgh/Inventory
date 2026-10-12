@@ -1,9 +1,12 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
 using Inventory.POS;
 using Inventory.SharedUI;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
+CultureInfo.DefaultThreadCurrentCulture = CultureInfo.GetCultureInfo("es-VE");
+CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.GetCultureInfo("es-VE");
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 

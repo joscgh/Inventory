@@ -1,4 +1,5 @@
-﻿using Inventory.SharedUI;
+﻿using System.Globalization;
+using Inventory.SharedUI;
 using Microsoft.AspNetCore.Components.WebView.Maui;
 using Microsoft.Extensions.Logging;
 
@@ -8,6 +9,9 @@ public static class MauiProgram
 {
 	public static MauiApp CreateMauiApp()
 	{
+		CultureInfo.DefaultThreadCurrentCulture = CultureInfo.GetCultureInfo("es-VE");
+		CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.GetCultureInfo("es-VE");
+
 		var builder = MauiApp.CreateBuilder();
 		builder
 			.UseMauiApp<App>()

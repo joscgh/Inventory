@@ -50,7 +50,7 @@
                             <div class="col-md-4">
                                 <label class="form-label">SKU</label>
                                 <div class="input-group">
-                                    <input class="@GetTextInputCss(!autoGenerateSku && string.IsNullOrWhiteSpace(newItem.SKU))" @bind="newItem.SKU" placeholder="e.g., SKU000001" disabled="@autoGenerateSku" />
+                                    <input class="@GetTextInputCss(!autoGenerateSku && string.IsNullOrWhiteSpace(newItem.SKU))" @bind="newItem.SKU" placeholder="Ej.: SKU000001" disabled="@autoGenerateSku" />
                                     <button class="btn btn-outline-secondary" type="button" @onclick="GenerateSku">Generar</button>
                                 </div>
                                 <div class="@GetFeedbackCss(!autoGenerateSku && string.IsNullOrWhiteSpace(newItem.SKU))">El SKU es obligatorio cuando no se genera automáticamente.</div>

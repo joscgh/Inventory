@@ -8,19 +8,19 @@
         <div class="col-lg-6 mb-4">
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <h3 class="card-title">🧾 Manage Taxes</h3>
-                    <p class="text-muted">Create and maintain taxes that can be applied to inventory items.</p>
+                    <h3 class="card-title">🧾 Administrar impuestos</h3>
+                    <p class="text-muted">Crea y administra impuestos que se pueden aplicar a los productos del inventario.</p>
 
                     <div class="mb-3">
-                        <label class="form-label">Name</label>
-                        <input class="form-control" @bind="taxModel.Name" placeholder="VAT" />
+                        <label class="form-label">Nombre</label>
+                        <input class="form-control" @bind="taxModel.Name" placeholder="IVA" />
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Rate (%)</label>
+                        <label class="form-label">Tasa (%)</label>
                         <input type="number" step="0.01" class="form-control" @bind="taxModel.Rate" min="0" max="100" />
                     </div>
 
-                    <button class="btn btn-primary" @onclick="SaveTax">Save Tax</button>
+                    <button class="btn btn-primary" @onclick="SaveTax">Guardar impuesto</button>
 
                     @if (!string.IsNullOrEmpty(message))
                     {
@@ -35,13 +35,13 @@
         <div class="col-lg-6 mb-4">
             <div class="card shadow-sm">
                 <div class="card-body">
-                    <h3 class="card-title">Existing Taxes</h3>
+                    <h3 class="card-title">Impuestos existentes</h3>
                     <div class="table-responsive">
                         <table class="table table-sm">
                             <thead>
                                 <tr>
-                                    <th>Name</th>
-                                    <th>Rate</th>
+                                    <th>Nombre</th>
+                                    <th>Tasa</th>
                                     <th></th>
                                 </tr>
                             </thead>
@@ -49,7 +49,7 @@
                                 @if (!taxes.Any())
                                 {
                                     <tr>
-                                        <td colspan="3" class="text-muted">No taxes saved yet.</td>
+                                        <td colspan="3" class="text-muted">Todavía no hay impuestos guardados.</td>
                                     </tr>
                                 }
                                 else
@@ -60,8 +60,8 @@
                                             <td>@tax.Name</td>
                                             <td>@tax.Rate.ToString("N2")%</td>
                                             <td>
-                                                <button class="btn btn-sm btn-outline-secondary me-2" @onclick="() => EditTax(tax)">Edit</button>
-                                                <button class="btn btn-danger btn-sm" @onclick="() => DeleteTax(tax.Id)">Delete</button>
+                                                <button class="btn btn-sm btn-outline-secondary me-2" @onclick="() => EditTax(tax)">Editar</button>
+                                                <button class="btn btn-danger btn-sm" @onclick="() => DeleteTax(tax.Id)">Eliminar</button>
                                             </td>
                                         </tr>
                                     }
@@ -99,7 +99,7 @@
 
         if (string.IsNullOrWhiteSpace(taxModel.Name) || taxModel.Rate < 0 || taxModel.Rate > 100)
         {
-            message = "Please enter a valid tax name and rate between 0 and 100.";
+            message = "Escribe un nombre de impuesto válido y una tasa entre 0 y 100.";
             messageClass = "alert alert-warning";
             return;
         }
@@ -107,14 +107,14 @@
         var success = await TaxService.SaveTaxAsync(taxModel);
         if (success)
         {
-            message = "Tax saved successfully.";
+            message = "El impuesto se guardó correctamente.";
             messageClass = "alert alert-success";
             taxModel = new Tax();
             await LoadTaxes();
         }
         else
         {
-            message = "Could not save the tax. It may already exist.";
+            message = "No se pudo guardar el impuesto. Es posible que ya exista.";
             messageClass = "alert alert-danger";
         }
     }
@@ -138,7 +138,7 @@
         }
         else
         {
-            message = "Could not delete the tax.";
+            message = "No se pudo eliminar el impuesto.";
             messageClass = "alert alert-danger";
         }
     }

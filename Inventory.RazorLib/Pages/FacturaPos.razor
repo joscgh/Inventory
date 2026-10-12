@@ -17,7 +17,7 @@
 <div class="container-fluid mt-4">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
-            <h1 class="h3 mb-1">Facturacion POS</h1>
+            <h1 class="h3 mb-1">Facturación POS</h1>
             <p class="text-muted mb-0">Busca productos, cobra y emite la factura.</p>
             @if (isOffline)
             {
@@ -92,13 +92,13 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center gap-3 mb-3">
                         <h2 class="h5 mb-0">Productos</h2>
-                        <input class="form-control" style="max-width: 22rem" placeholder="Buscar nombre, SKU o codigo" @bind="searchText" @bind:event="oninput" />
+                        <input class="form-control" style="max-width: 22rem" placeholder="Buscar por nombre, SKU o código" @bind="searchText" @bind:event="oninput" />
                     </div>
 
                     <div class="input-group mb-3">
                         <span class="input-group-text">Escanear</span>
                         <input class="form-control" @bind="scanCode" @onkeydown="HandleScanKeyDown"
-                               placeholder="Codigo de barras y Enter" autocomplete="off" />
+                               placeholder="Código de barras y pulsa Intro" autocomplete="off" />
                         <button class="btn btn-outline-primary" type="button" @onclick="ScanProduct">Agregar</button>
                     </div>
 
@@ -156,7 +156,7 @@
                     <h2 class="h5 mb-3">Carrito</h2>
                     @if (!invoiceLines.Any())
                     {
-                        <div class="alert alert-info">El carrito esta vacio.</div>
+                        <div class="alert alert-info">El carrito está vacío.</div>
                     }
                     else
                     {
@@ -192,7 +192,7 @@
                         }
                         <div class="row g-2">
                             <div class="col-6">
-                                <label class="form-label">Metodo</label>
+                                <label class="form-label">Método</label>
                                 <select class="form-select" @bind="paymentMethod">
                                     @foreach (var method in paymentMethods)
                                     {

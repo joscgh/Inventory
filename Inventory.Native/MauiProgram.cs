@@ -1,3 +1,4 @@
+using System.Globalization;
 using Inventory.SharedUI;
 using Inventory.SharedUI.Services;
 using Microsoft.AspNetCore.Components.WebView.Maui;
@@ -13,6 +14,9 @@ namespace Inventory.Native
     {
         public static MauiApp CreateMauiApp()
         {
+            CultureInfo.DefaultThreadCurrentCulture = CultureInfo.GetCultureInfo("es-VE");
+            CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.GetCultureInfo("es-VE");
+
             var builder = MauiApp.CreateBuilder();
             builder
                 .UseMauiApp<App>()

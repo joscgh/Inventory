@@ -10,23 +10,23 @@
 <div class="container-fluid mt-4">
     <div class="page-header mb-4">
         <div class="page-title-block">
-            <h2 class="mb-2">📊 Universal Inventory Management</h2>
+            <h2 class="mb-2">📊 Gestión universal de inventario</h2>
         </div>
         <div class="page-actions">
             <div class="alert alert-info m-0 py-2">
-                <strong>Total Inventory Value:</strong>
+                <strong>Valor total del inventario:</strong>
                 @foreach (var total in totalValueByCurrency)
                 {
                     <div>
                         @total.Key @total.Value.totalValue.ToString("N2")
-                        <span class="text-muted">(Tax incl. @total.Value.totalValueWithTax.ToString("N2"))</span>
+                        <span class="text-muted">(IVA incluido: @total.Value.totalValueWithTax.ToString("N2"))</span>
                         @if (total.Value.totalValueBs > 0)
                         {
                             <div class="ms-3 text-muted">Bs @total.Value.totalValueBs.ToString("N2")</div>
                         }
                         @if (total.Value.totalValueWithTaxBs > 0)
                         {
-                            <div class="ms-3 text-muted">Bs tax incl. @total.Value.totalValueWithTaxBs.ToString("N2")</div>
+                            <div class="ms-3 text-muted">Bs, IVA incluido: @total.Value.totalValueWithTaxBs.ToString("N2")</div>
                         }
                     </div>
                 }
@@ -112,28 +112,28 @@
                     <thead>
                         <tr>
                             @* <th>SKU</th> *@
-                            <th>Name</th>
-                            <th>Category</th>
-                            <th>Stock</th>
+                            <th>Nombre</th>
+                            <th>Categoría</th>
+                            <th>Existencias</th>
                             <th class="d-none d-md-table-cell">Comprometidos</th>
                             <th class="d-none d-lg-table-cell">Costo</th>
                             <th class="d-none d-lg-table-cell">Margen</th>
-                            <th>Unit Price</th>
-                            <th class="d-none d-md-table-cell">Price List</th>
-                            <th>Price with Tax</th>
-                            <th class="d-none d-sm-table-cell">Currency</th>
-                            <th class="d-none d-md-table-cell">Total Value</th>
-                            <th class="d-none d-md-table-cell">Total Value (incl. tax)</th>
-                            <th class="d-none d-lg-table-cell">Total Value (Bs)</th>
-                            <th class="d-none d-md-table-cell">Specifications (Attributes)</th>
-                            <th class="text-center">Actions</th>
+                            <th>Precio unitario</th>
+                            <th class="d-none d-md-table-cell">Lista de precios</th>
+                            <th>Precio con impuesto</th>
+                            <th class="d-none d-sm-table-cell">Moneda</th>
+                            <th class="d-none d-md-table-cell">Valor total</th>
+                            <th class="d-none d-md-table-cell">Valor total (IVA incluido)</th>
+                            <th class="d-none d-lg-table-cell">Valor total (Bs)</th>
+                            <th class="d-none d-md-table-cell">Especificaciones (atributos)</th>
+                            <th class="text-center">Acciones</th>
                         </tr>
                     </thead>
                     <tbody>
                         @if (!items.Any())
                         {
                             <tr>
-                                <td colspan="15" class="text-center text-muted py-4">No items registered in the inventory.</td>
+                                <td colspan="15" class="text-center text-muted py-4">No hay productos registrados en el inventario.</td>
                             </tr>
                         }
                         else
@@ -186,7 +186,7 @@
                                         }
                                         else
                                         {
-                                            <span class="text-muted">No rate</span>
+                                            <span class="text-muted">Sin tasa de cambio</span>
                                         }
                                     </td>
                                     <td class="d-none d-md-table-cell">
@@ -217,7 +217,7 @@
 
     <div class="summary-row mt-3">
         <div class="d-flex align-items-center flex-wrap gap-2">
-            <label class="form-label mb-0">Items por página:</label>
+            <label class="form-label mb-0">Productos por página:</label>
             <select class="form-select d-inline-block w-auto" @onchange="ChangePageSize">
                 <option value="5">5</option>
                 <option value="10" selected>10</option>

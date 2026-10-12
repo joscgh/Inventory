@@ -21,4 +21,15 @@ namespace Inventory.API.Services
         public string CancelPath { get; set; } = "cancel";
         public string ProviderCode { get; set; } = "generic-pos";
     }
+
+    public sealed class StripeOptions
+    {
+        public bool Enabled { get; set; }
+        public string ApiKey { get; set; } = string.Empty;
+        public string PublishableKey { get; set; } = string.Empty;
+        public string WebhookSecret { get; set; } = string.Empty;
+        public string ChargePath { get; set; } = "v1/charges";
+        public string BaseUrl { get; set; } = "https://api.stripe.com";
+        public string ProviderCode { get; set; } = "stripe";
+    }
 }
